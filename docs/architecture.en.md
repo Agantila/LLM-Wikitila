@@ -2,9 +2,9 @@
 
 LLM-Wikitila is a **local, evidence-oriented hybrid**: deterministic full-text search + authority/freshness resolution + an optional knowledge graph. Every component runs locally, without a service and without a model in the search runtime path.
 
-![LLM-Wikitila stack composition](../diagrams/stack-komposition.png)
+![LLM-Wikitila stack composition](../diagrams/stack-komposition.en.png)
 
-*Stack composition: editable source [diagrams/stack-komposition.excalidraw](../diagrams/stack-komposition.excalidraw) (excalidraw.com, drag and drop); regenerate with [diagrams/generate_diagram.py](../diagrams/generate_diagram.py).*
+*Stack composition: editable source [diagrams/stack-komposition.en.excalidraw](../diagrams/stack-komposition.en.excalidraw) (excalidraw.com, drag and drop); regenerate with [diagrams/generate_diagram.py](../diagrams/generate_diagram.py). German variant: [stack-komposition.png](../diagrams/stack-komposition.png).*
 
 ## Components
 

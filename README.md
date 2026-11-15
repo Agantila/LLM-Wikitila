@@ -39,7 +39,7 @@ Jede Antwort trägt `answer_status` (`belegt` · `widersprüchlich` · `belegt_g
 ## Installation
 
 Für Menschen: [docs/installation.de.md](docs/installation.de.md) — Voraussetzungen, Schritt für Schritt, Fehlerbehebung.
-Für KI-Agenten: [AGENTS.md](AGENTS.md) — Installation, Nutzung, Antwortvertrag und Pflege-Regeln für Agenten.
+Für KI-Agenten: [docs/agentic-setup.de.md](docs/agentic-setup.de.md) — Installation, Nutzung, Antwortvertrag und Pflege-Regeln für Agenten (Englisch: [docs/agentic-setup.en.md](docs/agentic-setup.en.md)).
 
 ## Was mitgeliefert wird
 
@@ -87,6 +87,7 @@ Kein Docker, kein Vector-Store-Dienst, keine Cloud. Der Suchindex liegt als eine
 | Betrieb & Pflege | [docs/operations.de.md](docs/operations.de.md) | [docs/operations.en.md](docs/operations.en.md) |
 | Validierung | [docs/validation.de.md](docs/validation.de.md) | [docs/validation.en.md](docs/validation.en.md) |
 | Belegte Vorteile | [docs/benefits.de.md](docs/benefits.de.md) | [docs/benefits.en.md](docs/benefits.en.md) |
+| Agentische Installation | [docs/agentic-setup.de.md](docs/agentic-setup.de.md) | [docs/agentic-setup.en.md](docs/agentic-setup.en.md) |
 
 ## Lizenz
 

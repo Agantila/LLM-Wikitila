@@ -4,38 +4,38 @@ description: Use when setting up or operating LLM-Wikitila search and graph on a
 license: MIT
 ---
 
-# LLM-Wikitila: schnelle, belegte Suche und lokaler Graph
+# LLM-Wikitila: fast, evidence-backed search and local graph
 
-Werkzeug: `wikitila.py` (Suche/Build/Status/Manifest/Check/Eval/Embed), `wikitila_graph.py` (lokale Graphify-Extraktion), `validate_catalog.py` (Validierung). Doku: `docs/` (deutsch + englisch). Agentenregeln: `AGENTS.md`.
+Tools: `wikitila.py` (search/build/status/manifest/check/eval/embed), `wikitila_graph.py` (local Graphify extraction), `validate_catalog.py` (validation). Docs: `docs/` (German + English). Agent rules: `AGENTS.md` / `docs/agentic-setup.en.md`.
 
-## Wann laden
+## When to load
 
-- Ein Ordner/Vault soll durchsuchbar werden (Suche, Graph, Second Brain, LLM Wiki).
-- Graphify soll lokal mit Ollama laufen statt mit Cloud-Subagenten.
-- Jemand fragt, ob ein Vector Store nötig ist.
+- A folder/vault should become searchable (search, graph, second brain, LLM wiki).
+- Graphify should run locally with Ollama instead of cloud subagents.
+- Someone asks whether a vector store is needed.
 
-## Ablauf in dieser Reihenfolge
+## Workflow, in this order
 
-0. **Erst nach Vorhandenem suchen, dann bauen.** Vor jedem Graph-Lauf über 5 Minuten Dauer, Nutzen und erwarteten Gewinn nennen (≈0,3 Dokumente/s) und klarstellen: die Suche trägt auch ohne Graph.
-1. `.graphifyignore` anlegen/erweitern, bevor irgendetwas gebaut wird (Fremdcode, Kopien, `node_modules`, `*.js`).
-2. `./install.sh <ziel-ordner>` (idempotent), dann `wikitila.py --root <ordner> build` und `search` testen.
-3. `authority_register.json` befüllen — erst danach greifen `kanonisch`/`überholt durch`/`veraltet`.
-4. Graph (optional): `wikitila_graph.py run --model maternion/ling-3.0-tiny:8b --workers 2`, dann `build`, dann `wikitila.py build`.
-5. **Abnahme über einen selbst angelegten Katalog** (JSONL, ~50 Fälle), gemessen mit `validate_catalog.py` auf drei Ebenen. Schema und Ablauf: `references/catalog-validation.md`.
+0. **Search what exists before building.** Before any graph run over 5 minutes, state the duration, benefit, and expected gain (≈0.3 documents/s) and make clear: search works without the graph.
+1. Create/extend `.graphifyignore` before building anything (third-party code, copies, `node_modules`, `*.js`).
+2. `./install.sh <target-folder>` (idempotent), then `wikitila.py --root <folder> build` and test `search`.
+3. Fill `authority_register.json` — only then do `kanonisch`/`überholt durch`/`veraltet` take effect.
+4. Graph (optional): `wikitila_graph.py run --model maternion/ling-3.0-tiny:8b --workers 2`, then `build`, then `wikitila.py build`.
+5. **Acceptance via a self-authored catalog** (JSONL, ~50 cases), measured with `validate_catalog.py` on three levels. Schema and procedure: `references/catalog-validation.md`.
 
-## Lehren (belegt)
+## Lessons (measured)
 
-- **Kein Vector Store als Dienst** für Korpora bis einige zehntausend Abschnitte: 26.000 Vektoren = 80 MB, Brute-Force 25 ms. Embedding optional und aus.
-- **Kleine Modelle vergeben Relationsarten falsch:** Entitäten sind brauchbar, Relationen nur als `related_to`, `INFERRED`, 0,5.
-- **Ollama arbeitet Anfragen nacheinander ab:** mehr als 2 Worker beschleunigen nichts. `think: false` + JSON-Schema (`format`).
-- **Graphify überspringt Dateien mit `token`/`secret`/`password`/`credential` im Namen.** Wo Sensibles auffindbar bleiben soll, Prüfung ersetzen (siehe `wikitila_graph.py`).
-- **`graph.json` wird beim Build überschrieben:** vorher sichern.
-- **Graphify speichert Kanten ungerichtet:** beim Import beide Richtungen prüfen.
-- **Dokument-IDs aus gekürztem Pfad kollidieren:** ID = gekürzter Pfad + Hash.
-- **Gescheiterte Dokumente (≈0,5 %) nachholen:** zweiter Lauf mit größerem `WIKITILA_NUM_PREDICT` (1600) und `WIKITILA_NUM_CTX` (8192), 1 Worker. Cache macht Läufe fortsetzbar.
-- **`graphify query` ist kein Dateifinder** (MRR 0,07): liefert Teilgraphen als Kontext. Für „wo steht das“ `wikitila.py search`, für Zusammenhänge `graphify path`/`explain`.
-- **Datei-Recall ist keine Antwortqualität:** Passagen, Authority und Abstention getrennt messen (`validate_catalog.py`).
-- **`score` ist RRF, keine Confidence.**
-- **„Nichts gefunden“ ≠ „nichts vorhanden“:** Status `nicht_belegt`, nie „existiert nicht“.
-- **Eigene neue Doku verfälscht den Katalog** (BM25 −0,03 MRR): Vergleiche nur im selben Korpusstand. Negativ-Teststichwörter nie in indexierte Doku schreiben.
-- **Eval mit Decision-Modell kann Rückfälle verbergen:** identische Zahlen heißen HTTP-Fehler + Fallback. Fehlerzähler prüfen.
+- **No vector store as a service** for corpora up to several tens of thousands of sections: 26,000 vectors = 80 MB, brute force 25 ms. Embedding is optional and off.
+- **Small models mis-assign relation types:** entities are usable; relations only as `related_to`, `INFERRED`, 0.5.
+- **Ollama processes requests sequentially:** more than 2 workers speed nothing up. `think: false` + JSON schema (`format`).
+- **Graphify skips files with `token`/`secret`/`password`/`credential` in the name.** Where sensitive material must stay findable, replace the check (see `wikitila_graph.py`).
+- **`graph.json` is overwritten on build:** back it up first.
+- **Graphify stores edges undirected:** check both directions on import.
+- **Document IDs from shortened paths collide:** ID = shortened path + hash.
+- **Failed documents (≈0.5%) need a second pass:** second run with larger `WIKITILA_NUM_PREDICT` (1600) and `WIKITILA_NUM_CTX` (8192), 1 worker. The cache makes runs resumable.
+- **`graphify query` is not a file finder** (MRR 0.07): it returns subgraphs as context. For "where does it say that" use `wikitila.py search`; for connections use `graphify path`/`explain`.
+- **File recall is not answer quality:** measure passages, authority, and abstention separately (`validate_catalog.py`).
+- **`score` is RRF, not confidence.**
+- **"Nothing found" ≠ "nothing exists":** status `nicht_belegt`, never "does not exist".
+- **New own docs skew the catalog** (BM25 −0.03 MRR): only compare on the same corpus state. Never write negative-test keywords into indexed docs.
+- **Eval with a decision model can hide regressions:** identical numbers mean HTTP errors + fallback. Check the error counters.

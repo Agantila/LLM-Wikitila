@@ -1,6 +1,6 @@
 # Agentische Installation und Betrieb (Deutsch)
 
-Diese Datei ist die Arbeitsanleitung für **KI-Agenten** (Hermes, Claude, Cursor u. ä.), die LLM-Wikitila in einem Projekt einrichten, nutzen oder pflegen. (Kann bei Bedarf 1:1 als `AGENTS.md` im Repo aktiviert werden.)
+Diese Datei ist die Arbeitsanleitung für **KI-Agenten** (Hermes, Claude, Cursor u. ä.), die LLM-Wikitila in einem Projekt einrichten, nutzen oder pflegen. (Englisch: [agentic-setup.en.md](agentic-setup.en.md). Kann bei Bedarf 1:1 als `AGENTS.md` im Repo aktiviert werden.)
 
 ## 1. Installation durch einen Agenten
 

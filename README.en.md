@@ -39,7 +39,7 @@ Every answer carries `answer_status` (`belegt` · `widersprüchlich` · `belegt_
 ## Installation
 
 For humans: [docs/installation.en.md](docs/installation.en.md) — prerequisites, step by step, troubleshooting.
-For AI agents: [AGENTS.md](AGENTS.md) — installation, usage, answer contract, and maintenance rules for agents.
+For AI agents: [docs/agentic-setup.en.md](docs/agentic-setup.en.md) — installation, usage, answer contract, and maintenance rules for agents (German: [docs/agentic-setup.de.md](docs/agentic-setup.de.md)).
 
 ## What's included
 
@@ -61,9 +61,9 @@ LLM-Wikitila/
 
 ## Stack composition
 
-![LLM-Wikitila stack composition](diagrams/stack-komposition.png)
+![LLM-Wikitila stack composition](diagrams/stack-komposition.en.png)
 
-Source: [diagrams/stack-komposition.excalidraw](diagrams/stack-komposition.excalidraw) — editable at [excalidraw.com](https://excalidraw.com) (drag and drop the file); regenerate with `diagrams/generate_diagram.py`. Component description: [docs/architecture.en.md](docs/architecture.en.md).
+Source: [diagrams/stack-komposition.en.excalidraw](diagrams/stack-komposition.en.excalidraw) — editable at [excalidraw.com](https://excalidraw.com) (drag and drop the file); regenerate with `diagrams/generate_diagram.py` (German variant: `stack-komposition.excalidraw`/`.png`). Component description: [docs/architecture.en.md](docs/architecture.en.md).
 
 ## Dependencies
 
@@ -87,6 +87,7 @@ No Docker, no vector-store service, no cloud. The search index is a single SQLit
 | Operations | [docs/operations.de.md](docs/operations.de.md) | [docs/operations.en.md](docs/operations.en.md) |
 | Validation | [docs/validation.de.md](docs/validation.de.md) | [docs/validation.en.md](docs/validation.en.md) |
 | Evidence-backed benefits | [docs/benefits.de.md](docs/benefits.de.md) | [docs/benefits.en.md](docs/benefits.en.md) |
+| Agentic setup | [docs/agentic-setup.de.md](docs/agentic-setup.de.md) | [docs/agentic-setup.en.md](docs/agentic-setup.en.md) |
 
 ## License
 

@@ -1,53 +1,53 @@
-# Katalog-Validierung mit LLM-Wikitila
+# Catalog validation with LLM-Wikitila
 
-Abnahmeeinheit ist die **belegte Aussage**, nicht die gefundene Datei. Der reine
-Datei-Recall reicht nicht als Vertrauensnachweis.
+The unit of acceptance is the **evidence-backed statement**, not the found file. File recall
+alone is not enough as proof of trust.
 
-## Drei Ebenen, ein Messwerkzeug
+## Three levels, one measurement tool
 
-`validate_catalog.py` misst einen erweiterten Katalog auf drei Ebenen:
+`validate_catalog.py` measures an extended catalog on three levels:
 
-1. **Datei-Recall** — erwartete Datei unter den Top-k.
-2. **Passagen-Präsenz** — enthält das Top-1-Ergebnis (volle Passagen) den antworttragenden
-   Beleg (Feld `passage` = Liste exakter Teilstrings)?
-3. **Negativ / Coverage** — wird bei fehlendem Wissen abgewiesen? Sind Nicht-Markdown-
-   Dateien als Ausschluss geführt?
+1. **File recall** — is the expected file among the top-k?
+2. **Passage presence** — does the top-1 result (full passages) carry the answer-bearing
+   evidence (field `passage` = list of exact substrings)?
+3. **Negatives / coverage** — does the search abstain when knowledge is missing? Are
+   non-Markdown files listed as exclusions?
 
-## Katalog-Schema (JSONL, eine Frage je Zeile)
+## Catalog schema (JSONL, one question per line)
 
 ```json
 {"q":"…", "type":"stichwort|paraphrase|aktueller-stand",
  "kind":"positiv|authority|coverage|negativ",
- "expect":["relativer/pfad.md"], "passage":["exakter","Teilstring"],
+ "expect":["relative/path.md"], "passage":["exact","substring"],
  "answer":"belegt|widerspruechlich|belegt_gueltigkeit_unbestaetigt|nicht_belegt"}
 ```
 
-- `kind=authority`: erwartete Datei ist die **aktuell gültige** Quelle; `passage`
-  trägt den aktuellen Wert. Fehlschlag = Freshness-/Ablösungsproblem.
-- `kind=coverage`: `expect` zeigt auf eine Nicht-Markdown-Datei. Sie ist erwartungsgemäß
-  nicht im Index (Scope = Markdown) — der Befund dokumentiert den Ausschluss.
-- `kind=negativ`: `expect` leer, `answer=nicht_belegt`. Ein nicht-leerer Top-1-
-  Treffer ist ein Falsch-positiv; das Signal `unmatched_terms`/`top1_missing_terms`
-  ist die Grundlage für die Abstention des Agenten.
+- `kind=authority`: the expected file is the **currently valid** source; `passage`
+  carries the current value. Failure = freshness/supersession problem.
+- `kind=coverage`: `expect` points to a non-Markdown file. It is expected to be absent
+  from the index (scope = Markdown) — the finding documents the exclusion.
+- `kind=negativ`: `expect` empty, `answer=nicht_belegt`. A non-empty top-1 hit is a
+  false positive; the signals `unmatched_terms`/`top1_missing_terms` are the basis for
+  the agent's abstention.
 
-## Aufruf
+## Invocation
 
 ```bash
-cd <ziel-ordner>
-python3 <pfad>/validate_catalog.py --root . --catalog golden_catalog.jsonl
+cd <target-folder>
+python3 <path>/validate_catalog.py --root . --catalog golden_catalog.jsonl
 ```
 
-## Referenzwerte (AGANTILA-Vault, 50 Fälle)
+## Reference values (AGANTILA vault, 50 cases)
 
-| Ebene | Ergebnis |
+| Level | Result |
 |---|---|
-| Datei-Recall (positiv+authority, n=36) | R@10 1,00, MRR 0,785 |
-| Passagen-Präsenz (Top-1, volle Passagen) | 45 % |
-| Abstention-Signal (Negativ) | 8/8 |
+| File recall (positive+authority, n=36) | R@10 1.00, MRR 0.785 |
+| Passage presence (top-1, full passages) | 45% |
+| Abstention signal (negatives) | 8/8 |
 
-## Pflicht beim Erweitern
+## Rules when extending
 
-- Der Katalog ist die Abnahme und wächst bei neuen Erkenntnissen.
-- Neue Fälle nur mit verifizierten, exakten Pfaden und Passage-Teilstrings.
-- Ergebnisse in der Doku (README, Validierungsdokument) nachziehen.
-- Datei-Recall ist kein Nachweis für Antwortqualität — Passagen und Status getrennt messen.
+- The catalog is the acceptance test and grows with new insights.
+- Add new cases only with verified, exact paths and passage substrings.
+- Update the results in the docs (README, validation document).
+- File recall is not proof of answer quality — measure passages and status separately.

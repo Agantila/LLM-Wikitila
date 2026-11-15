@@ -50,9 +50,33 @@ ARROWS = [
 
 TITLE = "LLM-Wikitila — Stack-Komposition"
 
+# Englische Labels (gleiche Geometrie; Statuswerte wie 'belegt' sind API-Feldwerte und bleiben original)
+EN_TITLE = "LLM-Wikitila — stack composition"
+EN_BOX = {
+    "src":       "Project folder (canonical)\nMarkdown files (.md/.txt)\n.graphifyignore\nwikitila.toml\nauthority_register.json",
+    "build":     "wikitila.py build\n(incremental, seconds)",
+    "index":     "SQLite file .wikitila/index.db\nFTS5 / BM25 + stem prefix\nLink graph (deterministic)\nEntity graph (weight 0.05)",
+    "graphrun":  "wikitila_graph.py run/build\n(optional, resumable)",
+    "ollama":    "Ollama · ling-3.0-tiny:8b\n(no thinking, local)",
+    "graphjson": "graphify-out/graph.json\n(navigation, no evidence source)",
+    "search":    "wikitila.py search  (~20 ms, no model)\nBM25 -> filename -> graph boost\nAuthority register -> answer gate",
+    "register":  "Authority register (owner-curated)\ncanonical · supersedes · stale_after · value",
+    "gate":      "Answer gate: belegt · widersprüchlich ·\nbelegt_gueltigkeit_unbestaetigt · nicht_belegt",
+    "result":    "Result: file · heading ·\noriginal passages · flags · answer_status",
+}
+EN_ARROW = {
+    ("src", "build"):     "files",
+    ("src", "graphrun"):  "files (optional)",
+    ("graphjson", "index"): "entities",
+    ("register", "search"): "topic -> canonical",
+    ("search", "result"): "hits",
+}
+
 # ---------------------------------------------------------------- Helfer
-def shape(box):
+def shape(box, en=False):
     i, x, y, w, h, fill, label, fs = box
+    if en:
+        label = EN_BOX.get(i, label)
     text_id = f"t_{i}"
     return (
         {"type": "rectangle", "id": i, "x": x, "y": y, "width": w, "height": h,
@@ -65,8 +89,10 @@ def shape(box):
          "containerId": i, "originalText": label, "autoResize": True},
     )
 
-def arrow(ar):
+def arrow(ar, en=False):
     a, b, sfp, efp, label, dashed = ar
+    if en:
+        label = EN_ARROW.get((a, b), label)
     ba = next(x for x in BOXES if x[0] == a)
     bb = next(x for x in BOXES if x[0] == b)
     x1 = ba[1] + ba[3] * sfp[0]
@@ -90,18 +116,21 @@ def arrow(ar):
                          "containerId": aid, "originalText": label, "autoResize": True})
     return elements
 
-def main():
+def main(lang="de"):
+    en = lang == "en"
+    title = EN_TITLE if en else TITLE
+    suffix = ".en" if en else ""
     elements = [{"type": "text", "id": "title", "x": 40, "y": 5, "width": 700, "height": 30,
-                 "text": TITLE, "fontSize": 24, "fontFamily": 1, "strokeColor": "#1e1e1e",
-                 "originalText": TITLE, "autoResize": True}]
+                 "text": title, "fontSize": 24, "fontFamily": 1, "strokeColor": "#1e1e1e",
+                 "originalText": title, "autoResize": True}]
     for b in BOXES:
-        elements.extend(shape(b))
+        elements.extend(shape(b, en=en))
     for ar in ARROWS:
-        elements.extend(arrow(ar))
+        elements.extend(arrow(ar, en=en))
     doc = {"type": "excalidraw", "version": 2, "source": "hermes-agent",
            "elements": elements, "appState": {"viewBackgroundColor": "#ffffff"}}
-    (OUT / "stack-komposition.excalidraw").write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
-    print("geschrieben:", OUT / "stack-komposition.excalidraw")
+    (OUT / f"stack-komposition{suffix}.excalidraw").write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
+    print("geschrieben:", OUT / f"stack-komposition{suffix}.excalidraw")
 
     # ---------------- HTML für PNG (gleiche Koordinaten)
     html = [f"""<!doctype html><html><head><meta charset="utf-8"><style>
@@ -115,10 +144,12 @@ def main():
     svg {{ position:absolute; left:0; top:0; }}
     .lab {{ font-size:15px; fill:#1e1e1e; font-family:inherit; }}
     </style></head><body>
-    <div class="ttl" style="left:40px;top:6px">{TITLE}</div>
+    <div class="ttl" style="left:40px;top:6px">{title}</div>
     <svg width="{W}" height="{H}"><defs><marker id="m" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 z" fill="#1e1e1e"/></marker></defs>"""]
     for ar in ARROWS:
         a, b, sfp, efp, label, dashed = ar
+        if en:
+            label = EN_ARROW.get((a, b), label)
         ba = next(x for x in BOXES if x[0] == a)
         bb = next(x for x in BOXES if x[0] == b)
         x1, y1 = ba[1] + ba[3] * sfp[0], ba[2] + ba[4] * sfp[1]
@@ -129,10 +160,13 @@ def main():
             html.append(f'<text class="lab" x="{(x1+x2)/2}" y="{(y1+y2)/2 - 6}" text-anchor="middle">{label}</text>')
     html.append("</svg>")
     for i, x, y, w, h, fill, label, fs in BOXES:
+        if en:
+            label = EN_BOX.get(i, label)
         html.append(f'<div class="box" style="left:{x}px;top:{y}px;width:{w}px;height:{h}px;background:{fill};font-size:{fs}px">{label}</div>')
     html.append("</body></html>")
-    (OUT / "_render.html").write_text("".join(html), encoding="utf-8")
-    print("geschrieben:", OUT / "_render.html")
+    (OUT / f"_render{suffix}.html").write_text("".join(html), encoding="utf-8")
+    print("geschrieben:", OUT / f"_render{suffix}.html")
 
 if __name__ == "__main__":
-    main()
+    main("de")
+    main("en")
