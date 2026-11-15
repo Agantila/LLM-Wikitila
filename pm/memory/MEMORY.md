@@ -9,3 +9,4 @@ Eine Zeile pro Eintrag. Format und Regeln: `AGENTS.md` Abschnitt 5.
 - [Negativ-Stichwörter nicht indexieren](negativ-stichwoerter-nicht-indexieren.md) — sie zerstören die lexikalische Abstention
 - [Maskierung an der Ausgabe, nicht im Index](maskierung-an-der-ausgabe.md) — jedes neue Ausgabefeld durch `mk()` schicken
 - [Synthetische Lastkorpora](synthetische-lastkorpora.md) — so wurden die Skalierungswerte gemessen
+- [Workspace-Einsatz über Release-Worktree](workspace-einsatz-release-worktree.md) — produktive Vaults laufen auf einem Tag, Entwicklung nur hier; Repo nie in indexierten Ordner legen

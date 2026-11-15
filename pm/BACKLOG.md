@@ -7,8 +7,7 @@ Priorität: P1 = als Nächstes · P2 = bald · P3 = bei Gelegenheit. Status: ✅
 | ID | Prio | Status | Thema | Bezug |
 |---|---|---|---|---|
 | B-001 | P1 | ⏳ | Veröffentlichung auf GitHub: Repo anlegen (Sichtbarkeit durch Owner), Branch `fix/review-2026-11-15` pushen, PR, CI grün, Merge, Tag `v0.2.0` | ROADMAP 0.2.0 |
-| B-002 | P1 | ⏳ | Bestehende Installationen mit `.sbs/` prüfen und auf `.wikitila/` migrieren oder `.sbs/` ignorieren | F1, Owner |
-| B-010 | P2 | ⏳ | MRR 0,785 → ≥ 0,80: verfehlte Ränge am Owner-Vault analysieren (nicht im Repo messbar) | validation.md |
+| B-010 | P2 | ⏳ | MRR 0,776 (Owner-Messung 2026-11-15) → ≥ 0,80: verfehlte Ränge am Owner-Vault analysieren (nicht im Repo messbar) | validation.md |
 | B-011 | P2 | ⏳ | Link-Graph inkrementell statt komplett neu bauen (Regex über alle Texte bei jedem Build) | Review Phase C |
 | B-012 | P3 | ⏳ | BM25-Kosten bei sehr häufigen Termen (Query mit ca. 1.500 Treffern: 50 ms): ggf. `limit` vor dem Ranking oder Ausschluss häufiger Terme messen | Review Phase C |
 | B-013 | P3 | ⏳ | Release-Signierung (signierte Tags) prüfen. Actions sind bereits auf Commit-SHA gepinnt und werden per Dependabot aktualisiert | F13 |
@@ -30,3 +29,4 @@ Priorität: P1 = als Nächstes · P2 = bald · P3 = bei Gelegenheit. Status: ✅
 | B-109 | F12 `wikitila_graph.py --root`, `mkdir` | 2026-11-15 | — |
 | B-110 | F13 PyPI-Name `graphifyy` gepinnt, MRR-Ziel offen dokumentiert, Demo-Korpus | 2026-11-15 | — |
 | B-111 | PM-Struktur, Memory, CI, Repo-Vorlagen | 2026-11-15 | — |
+| B-002 | Installation im Referenz-Vault von der alten Kopie (`.sbs/`) auf Release-Worktree `v0.2.0` umgestellt, `.wikitila/` gitignored, Werkzeug-Repo aus Vault-Index entfernt | 2026-11-15 | Entscheidung im Vault |
