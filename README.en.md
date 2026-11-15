@@ -55,8 +55,15 @@ LLM-Wikitila/
 ├── golden_catalog.example.jsonl     # Template for the question catalog
 ├── AGENTS.md                  # Agentic installation and operations guide
 ├── skills/llm-wikitila/       # Skill for AI agents (with reference)
+├── diagrams/                  # Stack composition diagram (PNG + editable .excalidraw)
 └── docs/                      # Documentation (German + English)
 ```
+
+## Stack composition
+
+![LLM-Wikitila stack composition](diagrams/stack-komposition.png)
+
+Source: [diagrams/stack-komposition.excalidraw](diagrams/stack-komposition.excalidraw) — editable at [excalidraw.com](https://excalidraw.com) (drag and drop the file); regenerate with `diagrams/generate_diagram.py`. Component description: [docs/architecture.en.md](docs/architecture.en.md).
 
 ## Dependencies
 
