@@ -1,0 +1,37 @@
+{
+  "version": "1.0",
+  "updated_at": "2026-11-15T00:00:00Z",
+  "convention": "authority_confirmed=false heißt Vorschlag; nur der menschliche Owner setzt true und ändert authority/canonical/supersedes.",
+  "entries": [
+    {
+      "id": "beispiel-preise",
+      "scope": "Preise der Produktlinie",
+      "canonical": "doku/preise_aktuell.md",
+      "authority": "canonical",
+      "owner": "<Name des Owners>",
+      "verified_at": "2026-01-01",
+      "stale_after": "2026-12-31",
+      "supersedes": ["doku/preise_alt.md"],
+      "superseded_by": null,
+      "status": "accepted",
+      "authority_confirmed": true,
+      "value": ["549"],
+      "note": "Beispiel: aktueller Preis 549 EUR; alte Fassung abgelöst."
+    },
+    {
+      "id": "beispiel-markenfarben",
+      "scope": "Markenfarben und Schrift",
+      "canonical": "doku/brand_tokens.md",
+      "authority": "canonical",
+      "owner": "<Name des Owners>",
+      "verified_at": "2026-01-01",
+      "stale_after": null,
+      "supersedes": [],
+      "superseded_by": null,
+      "status": null,
+      "authority_confirmed": true,
+      "value": ["#00DBDA"],
+      "note": "Beispiel: Akzentfarbe #00DBDA, Schrift Bai Jamjuree."
+    }
+  ]
+}

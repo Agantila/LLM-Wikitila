@@ -1,0 +1,48 @@
+# LLM-Wikitila: Beispielkonfiguration
+# Kopieren nach <ordner>/wikitila.toml. Alle Werte sind optional, es gelten die Vorgaben aus wikitila.py.
+
+[corpus]
+include_ext = [".md", ".txt"]
+# gitignore-ähnliche Muster. Vorgabe: dieselbe Datei, die Graphify nutzt.
+ignore_file = ".graphifyignore"
+extra_ignore = [".sbs/", "graphify-out/"]
+
+[index]
+db = ".sbs/index.db"
+max_chunk_chars = 450      # kleine Abschnitte nach Überschrift, liefern kurze Fundstellen
+min_chunk_chars = 40
+
+[rank]
+filename_boost = 0.004     # Treffer im Dateinamen
+graph_weight = 0.05        # Nachbarn der besten Dateien (Bereich 0.05 bis 0.10 gemessen, ab 0.15 fällt R@1)
+graph_top = 3
+rrf_k = 60
+stem_prefix = true         # "Anzeigen" findet "Anzeige": Wortstamm-Präfix bei Wörtern ab 7 Zeichen
+superseded_factor = 0.8    # Dateien mit superseded_by im Frontmatter rutschen nach hinten
+
+[graph]
+use_links = true           # Link-Graph aus Dateinamen, Wikilinks, Markdown-Links, ADR-Nummern (ohne LLM)
+use_graphify = true        # Dokument-Entitäts-Kanten aus graphify-out/graph.json
+graphify_json = "graphify-out/graph.json"
+entity_max_docs = 40       # Entitäten, die in mehr Dokumenten vorkommen, sind Rauschen (Hubs)
+
+[embedding]                # AUS in der Vorgabe (ADR-016). Einschalten erst nach Messung am Golden Set.
+enabled = false
+model = "embeddinggemma:latest"
+url = "http://localhost:11434"
+
+[decision]                 # AUS in der Vorgabe (ADR-016). Bewertet die Top-k Fundstellen, mischt per RRF mit der bisherigen Rangfolge.
+enabled = false
+backend = "chat"           # "chat" = Ollama-Chatmodell (think=false, JSON-Schema); "systemone" = LAYA-Vertrag POST /v1/systemone (Frage vom Typ noul)
+model = ""                 # nur für backend "chat", z. B. "qwen3.5:4b"
+url = "http://localhost:11434"   # für "systemone": z. B. "http://127.0.0.1:8766" (laya-serve), Token aus Umgebungsvariable token_env
+token_env = "LAYA_TOKEN"
+top_k = 8
+chars = 400
+
+[privacy]
+mask_secrets = true        # Schlüssel und Passwörter erscheinen nie in Fundstellen (die Dateien bleiben auffindbar)
+
+[authority]
+enabled = true             # Authority-Register (kanonische Quelle, Ablösung, Freshness) anwenden
+register = ""              # Pfad zur authority_register.json relativ zum Ordner; leer = <ordner>/authority_register.json

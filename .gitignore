@@ -1,0 +1,14 @@
+# LLM-Wikitila — lokale Index- und Arbeitsdaten (nie committen)
+.wikitila/
+graphify-out/
+wikitila.toml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Betriebssystem/Editor
+.DS_Store
+Thumbs.db
+*.swp
