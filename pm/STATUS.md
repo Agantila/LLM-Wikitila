@@ -17,11 +17,12 @@
 
 - Review 2026-11-15 umgesetzt (F1 bis F13), siehe [plans/2026-11-15-review-fixes.md](plans/2026-11-15-review-fixes.md).
 - PM-Struktur, Memory, CI und Repo-Vorlagen angelegt.
+- Veröffentlichung vorbereitet: Historie auf die Noreply-Adresse von Agantila umgeschrieben, interne Vault-Details neutralisiert, Tag `v0.2.0` neu gesetzt, Skripte ausführbar.
 - Produktiveinsatz umgestellt: alte Werkzeug-Kopie archiviert, der Referenz-Vault läuft aus dem Release `v0.2.0` (B-002 erledigt).
 
 ## Offen / nächster Schritt
 
-1. ⏳ **B-001:** Veröffentlichung auf GitHub (Repo anlegen, Sichtbarkeit klären, Branch pushen, PR, Merge). Freigabe durch den Owner nötig.
+1. 🟡 **B-001:** Veröffentlichung als öffentliches Repo `Agantila/LLM-Wikitila`. Vorbereitung erledigt, es fehlt die Anmeldung der `gh`-CLI als Agantila, dann Repo anlegen und pushen.
 2. ⏳ **B-010:** MRR auf ≥ 0,80 heben (Messung nur am Owner-Vault, Analyse der verfehlten Ränge).
 3. ⏳ **B-011:** Link-Graph inkrementell bauen (inkrementeller Build bei 10.000 Dateien: 1,9 s, dominiert vom kompletten Link-Neuaufbau).
 
