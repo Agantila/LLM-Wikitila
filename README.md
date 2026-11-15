@@ -56,6 +56,7 @@ LLM-Wikitila/
 ├── AGENTS.md                  # Agentische Installations- und Betriebsanleitung
 ├── skills/llm-wikitila/       # Skill für KI-Agenten (mit Referenz)
 ├── diagrams/                  # Stack-Kompositions-Diagramm (PNG + editierbares .excalidraw)
+├── review/                    # Metaprompt für Optimierungs-/Härtungs-Reviews (DE + EN)
 └── docs/                      # Dokumentation (deutsch + englisch)
 ```
 
