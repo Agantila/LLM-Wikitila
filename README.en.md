@@ -48,15 +48,20 @@ LLM-Wikitila/
 ├── wikitila.py                # Main tool: build · search · status · manifest · check · eval · embed
 ├── wikitila_graph.py          # Optional: local Graphify extraction (Ollama, no thinking)
 ├── validate_catalog.py        # Validation against a question catalog (3 measurement levels)
-├── test_wikitila.py           # 18 unit tests (synthetic corpus, no network/Ollama)
+├── test_wikitila.py           # 32 unit tests (synthetic corpus, no network/Ollama)
 ├── install.sh                 # Installer for a target folder
 ├── config.example.toml        # Example configuration (→ wikitila.toml)
 ├── authority_register.example.json  # Template for the authority register
 ├── golden_catalog.example.jsonl     # Template for the question catalog
-├── AGENTS.md                  # Agentic installation and operations guide
+├── AGENTS.md                  # Instructions for AI agents (development, gates, memory, PM)
+├── CLAUDE.md                  # Pointer to AGENTS.md for Claude Code
+├── CHANGELOG.md               # Version history
+├── examples/demo-corpus/      # Synthetic mini folder for the example catalog (CI validation)
+├── pm/                        # Project management: status, backlog, roadmap, plans, ADRs, memory, sessions
+├── .github/                   # CI (tests + demo validation), Dependabot, issue/PR templates
 ├── skills/llm-wikitila/       # Skill for AI agents (with reference)
 ├── diagrams/                  # Stack composition diagram (PNG + editable .excalidraw)
-├── review/                    # Meta-prompt for optimization/hardening reviews (EN + DE)
+├── review/                    # Review meta-prompt (EN + DE) and review reports
 └── docs/                      # Documentation (German + English)
 ```
 
@@ -73,7 +78,7 @@ Source: [diagrams/stack-komposition.en.excalidraw](diagrams/stack-komposition.en
 | Python | **≥ 3.11** (standard library suffices for search) | yes |
 | SQLite with FTS5 | included in Python ≥ 3.11 | yes |
 | Ollama + `maternion/ling-3.0-tiny:8b` | only for the knowledge graph | optional |
-| Graphify package (`pip install graphify`, `networkx`) | only for the knowledge graph | optional |
+| Graphify package (`pip install graphifyy==0.4.16 networkx==3.6.1`) | only for the knowledge graph | optional |
 | `embeddinggemma:latest` (Ollama) + `numpy` | only for optional embeddings | optional |
 
 No Docker, no vector-store service, no cloud. The search index is a single SQLite file inside the target folder (`.wikitila/index.db`).

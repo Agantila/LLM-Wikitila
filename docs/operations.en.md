@@ -38,6 +38,10 @@ No service, no autostart needed. For automation, a cron entry or git hook that r
 
 ## Security
 
-- The index (`.wikitila/index.db`) contains full text — whoever receives it receives its contents. It is therefore in `.gitignore`.
+- The index (`.wikitila/index.db`) contains full text (unmasked) — whoever receives it receives its contents. `.wikitila/` belongs in the target folder's `.gitignore`; `install.sh` adds it there if the folder is a Git repo.
+- Masking applies to all text fields of the output: passages, headings, titles, entity labels in `why`.
+- Symlinks pointing outside the folder (or nowhere) are not indexed and are counted as `symlink_outside_root` in the manifest. Symlinks inside the folder remain allowed.
+- Files over 600,000 bytes are skipped (checked before reading; `build`, `check`, and `manifest` count the same way).
+- Read commands (`search`, `eval`, `embed`, `status`) never create an index: if it is missing or empty, the call exits with code 2 instead of a seemingly valid `nicht_belegt`.
 - Snippets mask keys and passwords (`mask_secrets`, on by default); the files themselves remain findable.
 - Everything runs locally, nothing goes to the cloud.

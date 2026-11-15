@@ -5,7 +5,7 @@ Ersetzt nur den Subagenten-Schritt (Step 3B) des Graphify-Skills. Alles andere
 (AST, Cache, Build, Cluster, Bericht, Manifest) nutzt das Graphify-Paket.
 
 Aufruf (mit dem Python, in dem graphify installiert ist, hier /usr/bin/python3):
-  wikitila_graph.py bench --models a,b,c [--n 8]     Modelle vergleichen
+  wikitila_graph.py [--root DIR] bench --models a,b,c [--n 8]     Modelle vergleichen
   wikitila_graph.py run   --model M [--workers 3] [--limit N]   Extraktion, fortsetzbar
   wikitila_graph.py build [--no-ast]                 Graph, Cluster, Bericht, Manifest
 
@@ -180,7 +180,8 @@ def cmd_run(a):
         todo = todo[: a.limit]
     print(f"Dokumente {len(docs)}, im Cache {len(docs)-len(todo) if not a.limit else '?'}, offen {len(todo)}, Modell {a.model}, Worker {a.workers}", flush=True)
     t0, done, fail = time.time(), 0, 0
-    log = open(ROOT / "graphify-out" / "wikitila_run.log", "a")
+    (ROOT / "graphify-out").mkdir(exist_ok=True)
+    log = open(ROOT / "graphify-out" / "wikitila_run.log", "a", encoding="utf-8")
 
     def work(p: Path):
         title, body = read_doc(p)
@@ -225,6 +226,7 @@ def cmd_build(a):
     from graphify.detect import save_manifest
     det = detect_docs()
     out = ROOT / "graphify-out"
+    out.mkdir(exist_ok=True)
     ast = {"nodes": [], "edges": [], "hyperedges": []}
     if not a.no_ast:
         from graphify.extract import collect_files, extract
@@ -287,7 +289,9 @@ def cmd_build(a):
 
 
 def main():
+    global ROOT
     ap = argparse.ArgumentParser()
+    ap.add_argument("--root", default=None, help="Ziel-Ordner (Vorgabe: WIKITILA_ROOT oder aktuelles Verzeichnis)")
     sp = ap.add_subparsers(dest="cmd", required=True)
     b = sp.add_parser("bench"); b.add_argument("--models", required=True); b.add_argument("--n", type=int, default=8)
     b.add_argument("--out", default=str(Path(os.environ.get("TMPDIR", "/tmp")) / "wikitila_bench.json"))
@@ -295,6 +299,8 @@ def main():
     r.add_argument("--limit", type=int, default=0)
     bu = sp.add_parser("build"); bu.add_argument("--no-ast", action="store_true")
     a = ap.parse_args()
+    if a.root:
+        ROOT = Path(a.root).resolve()
     os.chdir(ROOT)
     {"bench": cmd_bench, "run": cmd_run, "build": cmd_build}[a.cmd](a)
 

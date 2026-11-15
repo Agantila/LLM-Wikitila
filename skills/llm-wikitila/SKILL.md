@@ -27,6 +27,7 @@ Tools: `wikitila.py` (search/build/status/manifest/check/eval/embed), `wikitila_
 
 - **No vector store as a service** for corpora up to several tens of thousands of sections: 26,000 vectors = 80 MB, brute force 25 ms. Embedding is optional and off.
 - **Small models mis-assign relation types:** entities are usable; relations only as `related_to`, `INFERRED`, 0.5.
+- **Exit code 2 means operator error, not an answer:** missing/empty index, broken `wikitila.toml`. Run `build` / fix the file; never report `nicht_belegt` in that case. Register problems arrive as `warnings` — mention them, canonical/superseded flags may be missing.
 - **Ollama processes requests sequentially:** more than 2 workers speed nothing up. `think: false` + JSON schema (`format`).
 - **Graphify skips files with `token`/`secret`/`password`/`credential` in the name.** Where sensitive material must stay findable, replace the check (see `wikitila_graph.py`).
 - **`graph.json` is overwritten on build:** back it up first.

@@ -41,7 +41,16 @@ Drei Ebenen:
 | Datei-Recall | R@10 **1,00**, MRR 0,785, p95 ~35 ms |
 | Passagen-Präsenz (Top-1, volle Passagen) | 45 % |
 | Abstention-Signal auf Negativ-Fällen | 8/8 |
-| Unit-Tests | 18/18 |
+| Unit-Tests | 18/18 (Stand der Messung; aktuell 32/32) |
+
+**Zielabgleich:** R@10 erfüllt das Ziel ≥ 0,95. MRR 0,785 liegt **unter** dem Ziel 0,80 — offener Punkt im Backlog (`pm/BACKLOG.md`, B-010).
+
+**Reproduzierbarkeit:** Die Referenzwerte stammen aus dem privaten Vault und sind aus dem Repo nicht nachmessbar. Die Werkzeugkette selbst lässt sich mit dem Demo-Korpus prüfen (läuft auch in der CI):
+
+```bash
+python3 wikitila.py --root examples/demo-corpus build
+python3 validate_catalog.py --root examples/demo-corpus --catalog golden_catalog.example.jsonl
+```
 
 ## Messgrenzen (ehrlich)
 

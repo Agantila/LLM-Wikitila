@@ -42,6 +42,10 @@ Das Register beantwortet **„welche Datei ist für dieses Thema maßgeblich“*
 
 **Wirkung:** Fragen mit Treffern in `preise_alt.md` werden auf `preise_aktuell.md` umgelenkt („überholt durch“), der Nachfolger erhält `kanonisch` und die Passage mit `549`. Trifft eine Frage ein Register-Thema (via `scope`), wird die kanonische Datei hochgezogen — das löst Terminologie-Mismatches („Such-Architektur“ ↔ Datei „Such-Schicht“).
 
+## Validierung beim Laden
+
+Das Register wird beim Laden geprüft. Unlesbares JSON, eine fehlende `entries`-Liste, Einträge ohne `canonical`, ein `stale_after` außerhalb von `JJJJ-MM-TT` oder ein `supersedes`, das keine Liste ist, erzeugen einen `Hinweis` in `search` (Feld `warnings`) und `status`. Ungültige Einträge oder Felder werden übersprungen; die Suche läuft weiter. Ein stillschweigend ignoriertes Register gibt es nicht mehr.
+
 ## Agentenregeln
 
 1. Vor jeder belastbaren Antwort zu einem Register-Thema den Eintrag lesen und die `canonical`-Datei als Quelle verwenden.

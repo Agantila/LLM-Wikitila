@@ -28,6 +28,12 @@ if [ ! -f authority_register.json ]; then
     echo "authority_register.json angelegt (aus der Vorlage — bitte mit den eigenen kanonischen Quellen befüllen)"
 fi
 
+# Der Index enthält Volltext: in Git-Repos .wikitila/ in die .gitignore des Ziel-Ordners aufnehmen (ADR-003)
+if [ -d .git ] && ! grep -qxF '.wikitila/' .gitignore 2>/dev/null; then
+    printf '\n# LLM-Wikitila-Index (Volltext, nie committen)\n.wikitila/\n' >> .gitignore
+    echo ".wikitila/ in .gitignore eingetragen"
+fi
+
 echo "== Index bauen =="
 "$PY" "$SCRIPT_DIR/wikitila.py" --root . build
 echo "== Index-/Quellstand-Abgleich =="

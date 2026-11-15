@@ -5,10 +5,10 @@
 include_ext = [".md", ".txt"]
 # gitignore-ähnliche Muster. Vorgabe: dieselbe Datei, die Graphify nutzt.
 ignore_file = ".graphifyignore"
-extra_ignore = [".sbs/", "graphify-out/"]
+extra_ignore = [".wikitila/", "graphify-out/"]
 
 [index]
-db = ".sbs/index.db"
+db = ".wikitila/index.db"   # Volltext-Index: in .gitignore des Ordners aufnehmen
 max_chunk_chars = 450      # kleine Abschnitte nach Überschrift, liefern kurze Fundstellen
 min_chunk_chars = 40
 

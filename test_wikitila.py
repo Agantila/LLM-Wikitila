@@ -1,8 +1,8 @@
 """Tests für wikitila.py mit einem synthetischen Mini-Korpus (keine Vault-Daten, kein Ollama).
 
-Aufruf: python3 -m unittest test_wikitila -v   (im Ordner second_brain_stack)
+Aufruf: python3 -m unittest test_wikitila -v   (im Repo-Wurzelordner)
 """
-import json, os, tempfile, unittest
+import json, os, subprocess, sys, tempfile, unittest
 from pathlib import Path
 
 import wikitila as W
@@ -39,7 +39,9 @@ class T(unittest.TestCase):
 
     def build(self):
         W.cmd_build(self.root, self.cfg)
-        return W.connect(self.root, self.cfg)
+        c = W.connect(self.root, self.cfg)
+        self.addCleanup(c.close)
+        return c
 
     def test_ignore_and_sensitive_findable(self):
         c = self.build()
@@ -202,7 +204,7 @@ class T(unittest.TestCase):
             self.assertEqual(seen[0][1]["questions"]["relevant"]["type"], "noul")
             self.assertEqual(seen[0][1].get("model"), "laya:latest")
         finally:
-            srv.shutdown()
+            srv.shutdown(); srv.server_close()
 
     def test_decision_failure_falls_back_to_ranking(self):
         c = self.build()
@@ -216,6 +218,143 @@ class T(unittest.TestCase):
         cfg = W.merge(self.cfg, {"embedding": {"enabled": True, "url": "http://127.0.0.1:1"}})
         res = W.search(c, cfg, "Safe Zones TikTok", 3)
         self.assertEqual(res["results"][0]["path"], "06_Marketing/TikTok_Specs.md")
+
+
+    # ---------- Review 2026-11-15 (F1–F13), siehe pm/plans/2026-11-15-review-fixes.md ----------
+
+    def test_f1_example_config_uses_wikitila_dir(self):
+        import tomllib
+        here = Path(__file__).resolve().parent
+        ex = tomllib.loads((here / "config.example.toml").read_text(encoding="utf-8"))
+        self.assertEqual(ex["index"]["db"], W.DEFAULTS["index"]["db"])
+        self.assertTrue(ex["index"]["db"].startswith(".wikitila/"))
+        self.assertIn(".wikitila/", ex["corpus"]["extra_ignore"])
+
+    def test_f2_secret_in_first_line_masked_everywhere(self):
+        (self.root / "09_Personal/Notiz.md").write_text(
+            "token: Zx9fakeSECRETvalue12345\n\nNotiz zur Lieferantenliste mit weiteren Details zum Projekt.\n", encoding="utf-8")
+        c = self.build()
+        res = W.search(c, self.cfg, "Lieferantenliste", 3)
+        dump = json.dumps(res, ensure_ascii=False)
+        self.assertNotIn("Zx9fakeSECRETvalue12345", dump)
+        self.assertEqual(res["results"][0]["path"], "09_Personal/Notiz.md")
+
+    def test_f3_chunks_mapping_stays_consistent(self):
+        c = self.build()
+        n = lambda q: c.execute(q).fetchone()[0]
+        self.assertEqual(n("select count(*) from t"), n("select count(*) from chunks"))
+        (self.root / "06_Marketing/TikTok_Specs.md").write_text("# TikTok Specs\n\n## Neu\n\nNur noch ein Abschnitt mit genug Text.\n", encoding="utf-8")
+        (self.root / "01_Strategie/Preise.md").unlink()
+        c = self.build()
+        self.assertEqual(n("select count(*) from t"), n("select count(*) from chunks"))
+        self.assertEqual(n("select count(*) from chunks c left join t on t.rowid=c.cid where t.rowid is null"), 0)
+        self.assertEqual(n("select count(*) from chunks where path='01_Strategie/Preise.md'"), 0)
+        self.assertEqual(n("select count(*) from chunks where path='06_Marketing/TikTok_Specs.md'"), 1)
+
+    def test_f3_migration_of_old_index(self):
+        c = self.build()
+        c.execute("drop table chunks"); c.execute("delete from meta where k='schema'"); c.commit(); c.close()
+        c = W.connect(self.root, self.cfg)
+        self.addCleanup(c.close)
+        self.assertEqual(c.execute("select count(*) from chunks").fetchone()[0], c.execute("select count(*) from t").fetchone()[0])
+        self.assertEqual(W.search(c, self.cfg, "Safe Zones TikTok", 3)["results"][0]["path"], "06_Marketing/TikTok_Specs.md")
+
+    def test_f5_broken_register_warns(self):
+        (self.root / "authority_register.json").write_text("{kaputt", encoding="utf-8")
+        cfg = W.load_cfg(self.root)
+        res = W.search(self.build(), cfg, "Safe Zones TikTok", 3)
+        self.assertTrue(any("Authority-Register" in w for w in res["warnings"]))
+
+    def test_f5_register_wrong_types_do_not_crash(self):
+        for data in ([], {"entries": "x"}, {"entries": [1, {"canonical": 5}, {"canonical": "06_Marketing/TikTok_Specs.md",
+                                                                               "stale_after": 20250101, "value": "Safe",
+                                                                               "supersedes": "x", "id": 3}]}):
+            (self.root / "authority_register.json").write_text(json.dumps(data), encoding="utf-8")
+            cfg = W.load_cfg(self.root)
+            res = W.search(self.build(), cfg, "Safe Zones TikTok", 3)
+            self.assertTrue(res["warnings"], data)
+            self.assertEqual(res["results"][0]["path"], "06_Marketing/TikTok_Specs.md")
+
+    def test_f6_missing_or_empty_index_is_an_error(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            cfg = W.load_cfg(root)
+            with self.assertRaises(W.WikitilaError):
+                W.require_index(root, cfg)
+            self.assertFalse((root / ".wikitila").exists())   # Lesebefehle legen nichts an
+            W.cmd_build(root, cfg)                              # leerer Ordner -> leerer Index
+            with self.assertRaises(W.WikitilaError):
+                W.require_index(root, cfg)
+
+    def test_f6_cli_exit_code(self):
+        with tempfile.TemporaryDirectory() as d:
+            here = Path(__file__).resolve().parent
+            r = subprocess.run([sys.executable, str(here / "wikitila.py"), "--root", d, "search", "x"],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 2)
+            self.assertIn("build", r.stderr)
+            self.assertNotIn("Traceback", r.stderr)
+
+    @unittest.skipIf(os.name == "nt", "Symlinks unter Windows nur mit Rechten")
+    def test_f7_f8_symlinks_outside_root_and_broken(self):
+        with tempfile.TemporaryDirectory() as outside:
+            (Path(outside) / "x.md").write_text("# Aussen\n\nMarmelade Rezept außerhalb des Ordners mit Text.\n", encoding="utf-8")
+            os.symlink(Path(outside) / "x.md", self.root / "link.md")
+            os.symlink(self.root / "fehlt.md", self.root / "kaputt.md")
+            (self.root / "intern.md").symlink_to(self.root / "06_Marketing/TikTok_Specs.md")
+            c = self.build()
+            paths = {p for (p,) in c.execute("select path from files")}
+            self.assertNotIn("link.md", paths)
+            self.assertNotIn("kaputt.md", paths)
+            self.assertIn("intern.md", paths)                   # Symlink innerhalb des Ordners bleibt erlaubt
+            W.cmd_manifest(self.root, self.cfg, None)            # darf nicht abbrechen
+            m = json.loads((self.root / ".wikitila/source_manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(m["totals"]["symlink_outside_root"], 2)
+
+    def test_f9_broken_toml_is_clear_error(self):
+        (self.root / "wikitila.toml").write_text("[rank\n", encoding="utf-8")
+        with self.assertRaises(W.WikitilaError):
+            W.load_cfg(self.root)
+
+    def test_f9_broken_graph_json_does_not_stop_build(self):
+        (self.root / "graphify-out").mkdir()
+        (self.root / "graphify-out/graph.json").write_text("{x", encoding="utf-8")
+        c = self.build()
+        self.assertGreater(c.execute("select count(*) from files").fetchone()[0], 0)
+        self.assertEqual(c.execute("select count(*) from ent").fetchone()[0], 0)
+
+    def test_f10_oversized_file_skipped_by_bytes(self):
+        (self.root / "gross.md").write_text("# Gross\n\n" + "ä" * (W.MAX_FILE_BYTES // 2 + 10), encoding="utf-8")
+        c = self.build()
+        self.assertNotIn("gross.md", {p for (p,) in c.execute("select path from files")})
+        self.assertFalse(W.cmd_check(self.root, self.cfg, None))   # check zählt gleich wie build
+
+    def test_f11_superseded_penalty_applied_once(self):
+        c = self.build()
+        q = "Starter kostet EUR"
+        score = lambda cfg: next(h["score"] for h in W.search(c, cfg, q, 5)["results"] if h["path"] == "01_Strategie/Preise.md")
+        only_fm = score(self.cfg)
+        (self.root / "authority_register.json").write_text(json.dumps({"entries": [{
+            "id": "p", "canonical": "01_Strategie/Preise_neu.md", "supersedes": ["01_Strategie/Preise.md"],
+            "authority": "canonical", "authority_confirmed": True}]}), encoding="utf-8")
+        both = score(W.load_cfg(self.root))
+        self.assertAlmostEqual(only_fm, both, places=5)
+
+    def test_f13_demo_corpus_reproduces_example_catalog(self):
+        here = Path(__file__).resolve().parent
+        with tempfile.TemporaryDirectory() as d:
+            import shutil
+            root = Path(d) / "demo"
+            shutil.copytree(here / "examples/demo-corpus", root, ignore=shutil.ignore_patterns(".wikitila"))
+            cfg = W.load_cfg(root)
+            W.cmd_build(root, cfg)
+            c = W.require_index(root, cfg)
+            self.addCleanup(c.close)
+            for line in (here / "golden_catalog.example.jsonl").read_text(encoding="utf-8").splitlines():
+                g = json.loads(line)
+                if g["kind"] in ("positiv", "authority"):
+                    paths = [h["path"] for h in W.search(c, cfg, g["q"], 10)["results"]]
+                    self.assertTrue(set(g["expect"]) & set(paths), g["q"])
 
 
 if __name__ == "__main__":

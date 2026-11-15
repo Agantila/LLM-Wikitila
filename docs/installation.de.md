@@ -8,7 +8,7 @@
 | SQLite FTS5 | in Python ≥ 3.11 enthalten | Suche — immer |
 | Ollama | installiert und laufend | Wissensgraph (optional) |
 | `maternion/ling-3.0-tiny:8b` | `ollama pull maternion/ling-3.0-tiny:8b` | Wissensgraph (optional) |
-| Graphify + networkx | `pip install graphify networkx` | Wissensgraph (optional) |
+| Graphify + networkx | `pip install graphifyy==0.4.16 networkx==3.6.1` (PyPI-Name **graphifyy**, Import `graphify`) | Wissensgraph (optional) |
 | `embeddinggemma:latest` + `numpy` | nur bei Embedding | Embedding (optional, Vorgabe: aus) |
 
 ## Schritt für Schritt
@@ -49,7 +49,7 @@ Hinweis: Der erste Graph-Lauf dauert (rund 0,3 Dokumente je Sekunde, z. B. 1.250
 python3 wikitila.py --root . status      # Index-Stand
 python3 wikitila.py --root . manifest    # Coverage-Report (Scope, Ausschlüsse)
 python3 wikitila.py --root . check       # Index-/Quellstand-Abgleich (kein Drift?)
-python3 -m unittest test_wikitila        # 18 Selbsttests
+python3 -m unittest test_wikitila        # Selbsttests (32)
 ```
 
 ## Fehlerbehebung
@@ -61,3 +61,6 @@ python3 -m unittest test_wikitila        # 18 Selbsttests
 | Treffer aus gelöschten Dateien | Index veraltet | `build` ausführen |
 | Graph-Lauf bricht ab | Ollama gestoppt oder Modell fehlt | `ollama list`, Lauf neu starten (setzt fort) |
 | Entitäts-Zuordnungen 0 | `graph.json` nicht neu gebaut | erst `wikitila_graph.py build`, dann `wikitila.py build` |
+| `FEHLER: Kein Index …` / `Index ist leer` (Exit-Code 2) | `build` noch nicht gelaufen oder Scope leer | `build` ausführen, `include_ext`/Ignore-Muster prüfen |
+| `FEHLER: Konfiguration fehlerhaft` | `wikitila.toml` ist kein gültiges TOML | Zeile/Spalte aus der Meldung korrigieren |
+| `Hinweis: Authority-Register …` | Register unlesbar oder Eintrag ungültig | JSON und Feldtypen prüfen (siehe docs/authority-register.de.md) |

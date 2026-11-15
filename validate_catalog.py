@@ -21,7 +21,7 @@ Aufruf:
 
 from __future__ import annotations
 
-import argparse, json, sys, time
+import argparse, json, math, sys, time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -43,11 +43,16 @@ def main() -> None:
     a = ap.parse_args()
 
     root = Path(a.root).resolve()
-    cfg = W.load_cfg(root)
-    c = W.connect(root, cfg)
+    try:
+        cfg = W.load_cfg(root)
+        c = W.require_index(root, cfg)
+    except W.WikitilaError as e:
+        sys.exit(f"FEHLER: {e}")
     indexed = {p for (p,) in c.execute("select path from files")}
 
     gold = [json.loads(l) for l in Path(a.catalog).read_text(encoding="utf-8").splitlines() if l.strip()]
+    if not gold:
+        sys.exit(f"FEHLER: Katalog {a.catalog} enthält keine Fälle.")
 
     # --- Teilmenge für Datei-Recall: indexierbare Fälle mit erwarteter Datei ---
     indexable = [g for g in gold if g["kind"] in ("positiv", "authority") and g["expect"]]
@@ -111,9 +116,11 @@ def main() -> None:
 
     # --- Auswertung ---
     n = len(ranks)
-    rec = lambda k: sum(1 for x in ranks if x and x <= k) / n
-    mrr = sum(1 / x for x in ranks if x) / n
-    ms = lambda p: sorted(lat)[int(n * p) - 1] * 1000 if n else 0
+    rec = lambda k: sum(1 for x in ranks if x and x <= k) / n if n else 0.0
+    mrr = sum(1 / x for x in ranks if x) / n if n else 0.0
+    # Latenz über alle Katalogfälle (nicht nur die Recall-Teilmenge), Index nach Nearest-Rank
+    sl = sorted(lat)
+    ms = lambda p: sl[max(0, math.ceil(len(sl) * p) - 1)] * 1000 if sl else 0
 
     print(f"Katalog: {len(gold)} Fälle "
           f"({sum(1 for g in gold if g['kind']=='positiv')} positiv, "

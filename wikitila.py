@@ -14,7 +14,7 @@ Konfiguration: <root>/wikitila.toml (siehe config.example.toml).
 """
 from __future__ import annotations
 
-import argparse, fnmatch, hashlib, json, math, os, re, sqlite3, sys, time, urllib.request
+import argparse, contextlib, fnmatch, hashlib, json, math, os, re, sqlite3, sys, time, urllib.request
 from collections import defaultdict
 from pathlib import Path
 
@@ -22,6 +22,14 @@ try:
     import tomllib
 except ModuleNotFoundError:  # Python < 3.11
     tomllib = None
+
+__version__ = "0.2.0"
+MAX_FILE_BYTES = 600_000   # Dateien darüber werden übersprungen (Bytes, in build/check/manifest gleich)
+
+
+class WikitilaError(Exception):
+    """Bedienfehler mit verständlicher Meldung (main gibt sie ohne Traceback aus, Exit-Code 2)."""
+
 
 DEFAULTS = {
     "corpus": {"include_ext": [".md", ".txt"], "ignore_file": ".graphifyignore", "extra_ignore": [".wikitila/", "graphify-out/"]},
@@ -62,42 +70,70 @@ def load_register(root: Path, cfg: dict) -> dict:
     Rückgabe: {"superseded_by": {alt -> neu}, "supersedes": {neu -> [alt]}, "meta": {pfad -> {…}}}.
     Leeres Register (Datei fehlt oder nicht aktiv) => leere Karten, die Suche läuft unverändert.
     """
-    empty = {"superseded_by": {}, "supersedes": {}, "meta": {}}
+    out = {"superseded_by": {}, "supersedes": {}, "meta": {}, "warnings": []}
     if not cfg.get("authority", {}).get("enabled", True):
-        return empty
-    rel = (cfg.get("authority", {}) or {}).get("register", "").strip()
+        return out
+    rel = str((cfg.get("authority", {}) or {}).get("register", "") or "").strip()
     candidates = [root / rel] if rel else []
     candidates.append(root / "authority_register.json")
-    path = next((p for p in candidates if p.exists()), None)
+    path = next((p for p in candidates if p.is_file()), None)
     if not path:
-        return empty
+        return out
+    warn = out["warnings"]
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return empty
-    out = {"superseded_by": {}, "supersedes": {}, "meta": {}}
-    for e in data.get("entries", []):
-        canon = e.get("canonical")
-        if not canon:
+    except (OSError, ValueError) as e:
+        warn.append(f"Authority-Register unlesbar ({path.name}: {str(e)[:80]}) — Register wird ignoriert, "
+                    "kanonisch/überholt-Markierungen fehlen")
+        return out
+    entries = data.get("entries") if isinstance(data, dict) else None
+    if not isinstance(entries, list):
+        warn.append(f"Authority-Register ungültig ({path.name}: erwartet Objekt mit Liste 'entries') — Register wird ignoriert")
+        return out
+    s = lambda v: v if isinstance(v, str) else ""
+    for i, e in enumerate(entries):
+        if not isinstance(e, dict) or not isinstance(e.get("canonical"), str) or not e["canonical"].strip():
+            warn.append(f"Authority-Register: Eintrag {i} übersprungen (kein Objekt oder 'canonical' fehlt)")
             continue
+        canon = e["canonical"].strip()
+        stale = e.get("stale_after")
+        if stale is not None and not (isinstance(stale, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", stale)):
+            warn.append(f"Authority-Register: '{e.get('id') or canon}' stale_after ungültig (erwartet JJJJ-MM-TT) — ignoriert")
+            stale = None
+        vals = e.get("value") or []
+        vals = [vals] if isinstance(vals, str) else [v for v in vals if isinstance(v, str)] if isinstance(vals, list) else []
         out["meta"][canon] = {
             "authority": e.get("authority"),
-            "stale_after": e.get("stale_after"),
+            "stale_after": stale,
             "status": e.get("status"),
             "verified_at": e.get("verified_at"),
-            "confirmed": bool(e.get("authority_confirmed")),
-            "value": e.get("value") or [],
-            "alias": " ".join([e.get("id") or "", e.get("scope") or "", e.get("note") or ""]),
+            "confirmed": e.get("authority_confirmed") is True,
+            "value": vals,
+            "alias": " ".join([s(e.get("id")), s(e.get("scope")), s(e.get("note"))]),
         }
-        for old in e.get("supersedes") or []:
-            out["superseded_by"][old] = canon
-            out["supersedes"].setdefault(canon, []).append(old)
+        sup = e.get("supersedes") or []
+        if not isinstance(sup, list):
+            warn.append(f"Authority-Register: '{e.get('id') or canon}' supersedes ist keine Liste — ignoriert")
+            sup = []
+        for old in sup:
+            if isinstance(old, str) and old and old != canon:
+                out["superseded_by"][old] = canon
+                out["supersedes"].setdefault(canon, []).append(old)
     return out
 
 
 def load_cfg(root: Path) -> dict:
     p = Path(os.environ.get("WIKITILA_CONFIG", root / "wikitila.toml"))
-    cfg = merge(DEFAULTS, tomllib.loads(p.read_text(encoding="utf-8"))) if (p.exists() and tomllib) else merge(DEFAULTS, {})
+    over = {}
+    if p.exists():
+        if tomllib is None:
+            print(f"Warnung: {p} wird ignoriert (Python < 3.11 hat kein tomllib)", file=sys.stderr)
+        else:
+            try:
+                over = tomllib.loads(p.read_text(encoding="utf-8"))
+            except (OSError, tomllib.TOMLDecodeError) as e:
+                raise WikitilaError(f"Konfiguration fehlerhaft: {p}: {e}")
+    cfg = merge(DEFAULTS, over)
     cfg["_authority"] = load_register(root, cfg)
     return cfg
 
@@ -139,7 +175,20 @@ def ignored(rel: str, pats: list[str]) -> bool:
     return False
 
 
+def inside_root(root: Path, rel: str) -> bool:
+    """False, wenn rel ein Symlink ist, der aus dem Ordner herausführt (oder ins Leere zeigt)."""
+    p = root / rel
+    if not p.is_symlink():
+        return True
+    try:
+        p.resolve(strict=True).relative_to(root.resolve())
+        return True
+    except (OSError, ValueError, RuntimeError):
+        return False
+
+
 def walk(root: Path, cfg: dict):
+    """Dateien im Scope (include_ext, nicht ignoriert, nicht außerhalb des Ordners verlinkt)."""
     pats = load_ignore(root, cfg)
     exts = tuple(cfg["corpus"]["include_ext"])
     for r, dirs, files in os.walk(root):
@@ -149,8 +198,19 @@ def walk(root: Path, cfg: dict):
                    and not ignored((rr + "/" + d).lstrip("/"), pats)]
         for n in files:
             rel = (rr + "/" + n).lstrip("/")
-            if n.endswith(exts) and not ignored(rel, pats):
+            if n.endswith(exts) and not ignored(rel, pats) and inside_root(root, rel):
                 yield rel
+
+
+def read_source(root: Path, rel: str) -> str | None:
+    """Liest eine Quelldatei; None bei Lesefehler oder über MAX_FILE_BYTES (vor dem Lesen geprüft)."""
+    p = root / rel
+    try:
+        if p.stat().st_size > MAX_FILE_BYTES:
+            return None
+        return p.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None
 
 
 # ---------- Dokumente ----------
@@ -191,8 +251,11 @@ def chunk_text(body: str, cap: int, mn: int) -> list[tuple[str, str]]:
     return [(h, c) for h, c in out if len(c.strip()) >= mn]
 
 
-def connect(root: Path, cfg: dict) -> sqlite3.Connection:
+def connect(root: Path, cfg: dict, create: bool = True) -> sqlite3.Connection:
+    """Öffnet den Index. create=False: Fehler statt leerer Index, wenn die Datei fehlt (Lesebefehle)."""
     db = root / cfg["index"]["db"]
+    if not create and not db.exists():
+        raise WikitilaError(f"Kein Index unter {db} — zuerst `wikitila.py --root {root} build` ausführen.")
     db.parent.mkdir(parents=True, exist_ok=True)
     c = sqlite3.connect(db)
     c.executescript("""
@@ -204,8 +267,37 @@ def connect(root: Path, cfg: dict) -> sqlite3.Connection:
     create index if not exists ent_doc on ent(doc); create index if not exists ent_e on ent(entity);
     create table if not exists emb(cid integer primary key, h text, vec blob);
     create table if not exists meta(k text primary key, v text);
+    create table if not exists chunks(cid integer primary key, path text not null);
+    create index if not exists chunks_path on chunks(path);
     """)
+    # Migration (ADR-002): ältere Indizes ohne chunks-Tabelle einmalig nachziehen
+    if c.execute("select v from meta where k='schema'").fetchone() is None:
+        c.execute("delete from chunks")
+        c.execute("insert into chunks(cid, path) select rowid, path from t")
+        c.execute("insert or replace into meta values ('schema', '2')")
+        c.commit()
     return c
+
+
+def chunk_ids(c, path: str) -> list[int]:
+    return [cid for (cid,) in c.execute("select cid from chunks where path=? order by cid", (path,))]
+
+
+def delete_doc(c, path: str):
+    ids = chunk_ids(c, path)
+    for i in range(0, len(ids), 500):
+        part = ids[i:i + 500]
+        c.execute(f"delete from t where rowid in ({','.join('?' * len(part))})", part)
+        c.execute(f"delete from emb where cid in ({','.join('?' * len(part))})", part)
+    c.execute("delete from chunks where path=?", (path,))
+
+
+def in_rows(c, sql: str, ids: list, extra: tuple = ()):
+    """Führt sql mit einer IN-Liste in Portionen aus (SQLite-Parameterlimit). sql enthält {q} für die Platzhalter."""
+    ids = list(ids)
+    for i in range(0, len(ids), 500):
+        part = ids[i:i + 500]
+        yield from c.execute(sql.format(q=",".join("?" * len(part))), (*part, *extra))
 
 
 # ---------- build ----------
@@ -216,13 +308,10 @@ def cmd_build(root: Path, cfg: dict):
     cap, mn = cfg["index"]["max_chunk_chars"], cfg["index"]["min_chunk_chars"]
     seen, changed, texts = set(), 0, {}
     for rel in walk(root, cfg):
+        raw = read_source(root, rel)
+        if raw is None:
+            continue
         seen.add(rel)
-        try:
-            raw = (root / rel).read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            continue
-        if len(raw) > 600_000:
-            continue
         texts[rel] = raw
         sha = hashlib.sha1(raw.encode("utf-8", "ignore")).hexdigest()
         if known.get(rel) == sha:
@@ -232,18 +321,18 @@ def cmd_build(root: Path, cfg: dict):
         mt = re.search(r"^#\s+(.+)$", body, re.M)
         base = fm.get("title") or (mt.group(1).strip() if mt else Path(rel).stem)
         search_title = base + " " + Path(rel).stem   # Dateinamen-Stamm durchsuchbar (ADR-Nummern, Identifier)
-        c.execute("delete from t where path=?", (rel,))
-        c.execute("delete from emb where cid not in (select rowid from t)")
+        delete_doc(c, rel)
         desc = fm.get("description", "")
         chs = chunk_text(body, cap, mn) or [(base, base + (" " + body.strip() if body.strip() else ""))]  # Kurzdatei bleibt über den Titel auffindbar
         for head, ch in chs:
-            c.execute("insert into t(title, head, body, path) values (?,?,?,?)",
-                      (search_title + (" " + desc if desc else ""), head, ch, rel))
+            cur = c.execute("insert into t(title, head, body, path) values (?,?,?,?)",
+                            (search_title + (" " + desc if desc else ""), head, ch, rel))
+            c.execute("insert into chunks(cid, path) values (?,?)", (cur.lastrowid, rel))
         c.execute("insert or replace into files values (?,?,?,?,?,?)",
                   (rel, sha, base, fm.get("status", ""), fm.get("superseded_by", ""), desc))
     gone = [p for p in known if p not in seen]
     for p in gone:
-        c.execute("delete from t where path=?", (p,)); c.execute("delete from files where path=?", (p,))
+        delete_doc(c, p); c.execute("delete from files where path=?", (p,))
     # Link-Graph: deterministisch aus Dateinamen, Wikilinks, Markdown-Links und ADR-Nummern
     c.execute("delete from links")
     if cfg["graph"]["use_links"]:
@@ -280,11 +369,21 @@ def cmd_build(root: Path, cfg: dict):
     c.execute("delete from ent")
     gfile = root / cfg["graph"]["graphify_json"]
     nent = 0
+    g = None
     if cfg["graph"]["use_graphify"] and gfile.exists():
-        g = json.loads(gfile.read_text(encoding="utf-8"))
-        nodes = {n["id"]: n for n in g.get("nodes", [])}
+        try:
+            g = json.loads(gfile.read_text(encoding="utf-8"))
+            if not isinstance(g, dict):
+                raise ValueError("kein JSON-Objekt")
+        except (OSError, ValueError) as e:
+            print(f"Warnung: {gfile} unlesbar ({str(e)[:80]}) — Index ohne Entitäten gebaut", file=sys.stderr)
+            g = None
+    if g is not None:
+        nodes = {n["id"]: n for n in g.get("nodes", []) if isinstance(n, dict) and "id" in n}
         pairs = defaultdict(set)
         for e in g.get("links", g.get("edges", [])):
+            if not isinstance(e, dict):
+                continue
             a, b = nodes.get(e.get("source")), nodes.get(e.get("target"))
             if not a or not b:
                 continue
@@ -303,6 +402,7 @@ def cmd_build(root: Path, cfg: dict):
     n_links = c.execute("select count(*) from links").fetchone()[0] // 2
     print(f"Index: {len(seen)} Dateien ({changed} neu/geändert, {len(gone)} entfernt), {n_chunks} Abschnitte, "
           f"{n_links} Link-Kanten, {nent} Entitäts-Zuordnungen, {time.time()-t0:.1f}s")
+    c.close()
 
 
 # ---------- Suche ----------
@@ -388,8 +488,9 @@ def search(c, cfg, q: str, k=5, *, graph=True, dense=None, filename=True, decisi
     r = cfg["rank"]
     dense = cfg["embedding"]["enabled"] if dense is None else dense
     decision = cfg["decision"]["enabled"] if decision is None else decision
-    cpath = {cid: p for cid, p in c.execute("select rowid, path from t")}
     lists, why = [], defaultdict(list)
+    reg = cfg.get("_authority") or {}
+    why["_warn"].extend(reg.get("warnings", []))
     fq = fts_query(q, r["stem_prefix"])
     bm = []
     bm25_top = None
@@ -406,6 +507,9 @@ def search(c, cfg, q: str, k=5, *, graph=True, dense=None, filename=True, decisi
                 lists.append(dl)
         except Exception as e:  # Ollama weg: BM25 trägt weiter
             why["_warn"].append(f"Embedding aus: {str(e)[:60]}")
+    cand_ids = {cid for lst in lists for cid in lst}
+    cpath = dict(in_rows(c, "select cid, path from chunks where cid in ({q})", cand_ids))
+    lists = [[cid for cid in lst if cid in cpath] for lst in lists]
     sc = file_scores(lists, cpath, r["rrf_k"])
     best_chunk = {}
     best_chunks = {}
@@ -434,14 +538,17 @@ def search(c, cfg, q: str, k=5, *, graph=True, dense=None, filename=True, decisi
             for ent, lab, n in c.execute("select entity, label, n from ent where doc=?", (p,)):
                 wgt = 1 / math.log(2 + n)
                 for (d2,) in c.execute("select doc from ent where entity=? and doc!=?", (ent, p)):
-                    add[d2] += r["graph_weight"] * s * wgt; why[d2].append(f"teilt '{lab}'")
+                    lab_out = mask(lab) if cfg["privacy"]["mask_secrets"] else lab   # F2: Entitäts-Labels aus dem Graph
+                    add[d2] += r["graph_weight"] * s * wgt; why[d2].append(f"teilt '{lab_out}'")
         for b, a in add.items():
             sc[b] = sc.get(b, 0) + a
-    meta = {p: (t, st, sb, sm) for p, t, st, sb, sm in c.execute("select path, title, status, superseded_by, summary from files")}
+    need = set(sc) | set(reg.get("meta", {})) | set(reg.get("superseded_by", {})) | set(reg.get("superseded_by", {}).values())
+    meta = {p: (t, st, sb, sm) for p, t, st, sb, sm in
+            in_rows(c, "select path, title, status, superseded_by, summary from files where path in ({q})", need)}
+    penalized = set()   # F11: Abwertungsfaktor höchstens einmal je Datei
     for p in list(sc):
         if p in meta and (meta[p][2] or meta[p][1].lower() == "superseded"):
-            sc[p] *= r["superseded_factor"]
-    reg = cfg.get("_authority") or {}
+            sc[p] *= r["superseded_factor"]; penalized.add(p)
     if reg:
         sbb = reg.get("superseded_by", {})
         for old, new in sbb.items():
@@ -451,16 +558,17 @@ def search(c, cfg, q: str, k=5, *, graph=True, dense=None, filename=True, decisi
                 if new not in best_chunks:
                     vals = reg.get("meta", {}).get(new, {}).get("value") or []
                     if vals:
-                        picked = [cid for (cid, bd) in c.execute("select rowid, body from t where path=?", (new,))
+                        picked = [cid for (cid, bd) in in_rows(c, "select rowid, body from t where rowid in ({q})", chunk_ids(c, new))
                                   if any(v in bd for v in vals)]
                         if picked:
                             best_chunks[new] = picked[:3]
                     if new not in best_chunks and fq:
-                        for (cid,) in c.execute("select rowid from t where path=? and t match ? "
-                                                "order by bm25(t, 6.0, 3.0, 1.0) limit 3", (new, fq)):
+                        for (cid,) in c.execute("select rowid from t where t match ? and rowid in "
+                                                "(select cid from chunks where path=?) order by bm25(t, 6.0, 3.0, 1.0) limit 3", (fq, new)):
                             best_chunks.setdefault(new, []).append(cid)
             if old in sc:
-                sc[old] *= r["superseded_factor"]
+                if old not in penalized:
+                    sc[old] *= r["superseded_factor"]; penalized.add(old)
                 why[old].append(f"überholt durch {os.path.basename(new)}")
         # Register als Thema→kanonisch-Karte: Trifft die Frage ein Register-Thema, die kanonische Datei hochziehen
         qtoks = tokens(q)
@@ -472,13 +580,13 @@ def search(c, cfg, q: str, k=5, *, graph=True, dense=None, filename=True, decisi
                 if canon not in best_chunks:
                     vals = m.get("value") or []
                     if vals:
-                        picked = [cid for (cid, bd) in c.execute("select rowid, body from t where path=?", (canon,))
+                        picked = [cid for (cid, bd) in in_rows(c, "select rowid, body from t where rowid in ({q})", chunk_ids(c, canon))
                                   if any(v in bd for v in vals)]
                         if picked:
                             best_chunks[canon] = picked[:3]
                     if canon not in best_chunks and fq:
-                        for (cid,) in c.execute("select rowid from t where path=? and t match ? "
-                                                "order by bm25(t, 6.0, 3.0, 1.0) limit 3", (canon, fq)):
+                        for (cid,) in c.execute("select rowid from t where t match ? and rowid in "
+                                                "(select cid from chunks where path=?) order by bm25(t, 6.0, 3.0, 1.0) limit 3", (fq, canon)):
                             best_chunks.setdefault(canon, []).append(cid)
     ranked = sorted(sc.items(), key=lambda x: -x[1])
     note = None
@@ -490,8 +598,9 @@ def search(c, cfg, q: str, k=5, *, graph=True, dense=None, filename=True, decisi
             cid = best_chunk.get(p)
             row = c.execute("select head, body from t where rowid=?", (cid,)).fetchone() if cid else None
             if not row:
-                row = c.execute("select head, body from t where path=? limit 1", (p,)).fetchone() or ("", "")
-            cands.append((p + " / " + row[0], row[1]))
+                ids = chunk_ids(c, p)[:1]
+                row = (c.execute("select head, body from t where rowid=?", (ids[0],)).fetchone() if ids else None) or ("", "")
+            cands.append((p + " / " + row[0], mask(row[1]) if cfg["privacy"]["mask_secrets"] else row[1]))
         try:
             ds = (decide_systemone if cfg["decision"]["backend"] == "systemone" else decide)(cfg, q, cands)
             order_d = sorted(range(len(head)), key=lambda i: -ds[i])
@@ -509,21 +618,23 @@ def search(c, cfg, q: str, k=5, *, graph=True, dense=None, filename=True, decisi
             if row:
                 rows.append(row)
         if not rows:
-            rows = [c.execute("select head, body from t where path=? order by rowid limit 1", (p,)).fetchone() or ("", "")]
+            ids = chunk_ids(c, p)[:1]
+            rows = [(c.execute("select head, body from t where rowid=?", (ids[0],)).fetchone() if ids else None) or ("", "")]
         pr = cfg["privacy"]["mask_secrets"]
+        mk = mask if pr else (lambda x: x)   # F2: alle Textfelder der Ausgabe, nicht nur body
         passages = []
         for head, body in rows:
             body = re.sub(r"\s+", " ", body).strip()
-            passages.append({"heading": head, "body": mask(body) if pr else body})
+            passages.append({"heading": mk(head), "body": mk(body)})
         snippet = passages[0]["body"][:260]
         rm = reg.get("meta", {}).get(p, {}) if reg else {}
         today = time.strftime("%Y-%m-%d")
-        stale = bool(rm.get("stale_after")) and rm["stale_after"] < today
+        stale = isinstance(rm.get("stale_after"), str) and rm["stale_after"] < today
         unverified = bool(rm) and (not rm.get("confirmed") or rm.get("status") in ("proposed", "draft"))
         sup_by = reg.get("superseded_by", {}).get(p) or meta.get(p, ("", "", ""))[2]
-        out.append({"path": p, "score": round(s, 5), "title": meta.get(p, ("",))[0], "heading": passages[0]["heading"],
+        out.append({"path": p, "score": round(s, 5), "title": mk(meta.get(p, ("",))[0]), "heading": passages[0]["heading"],
                     "snippet": snippet, "passages": passages,
-                    "why": list(dict.fromkeys(why[p]))[:4],
+                    "why": list(dict.fromkeys(why[p]))[:4],   # Labels schon beim Erzeugen maskiert; Dateinamen bleiben lesbar
                     "superseded_by": sup_by or None,
                     "canonical": bool(rm.get("authority") == "canonical"),
                     "stale": stale, "unverified": unverified})
@@ -560,8 +671,18 @@ def search(c, cfg, q: str, k=5, *, graph=True, dense=None, filename=True, decisi
             "top1_missing_terms": top1_missing, "bm25_top": bm25_top}
 
 
+def require_index(root, cfg) -> sqlite3.Connection:
+    """Index für Lesebefehle: fehlt er oder ist er leer, Fehler statt scheinbarem 'nicht_belegt' (F6)."""
+    c = connect(root, cfg, create=False)
+    if c.execute("select count(*) from files").fetchone()[0] == 0:
+        c.close()
+        raise WikitilaError(f"Index ist leer — zuerst `wikitila.py --root {root} build` ausführen "
+                            "(oder include_ext/Ignore-Muster prüfen).")
+    return c
+
+
 def cmd_search(root, cfg, a):
-    c = connect(root, cfg)
+    c = require_index(root, cfg)
     t0 = time.time()
     res = search(c, cfg, a.query, a.k)
     dt = (time.time() - t0) * 1000
@@ -589,7 +710,7 @@ def cmd_search(root, cfg, a):
 # ---------- Embedding (optional) ----------
 def cmd_embed(root, cfg):
     import numpy as np
-    c = connect(root, cfg)
+    c = require_index(root, cfg)
     rows = c.execute("select rowid, title, head, body from t").fetchall()
     have = {h for (h,) in c.execute("select h from emb")}
     todo = []
@@ -613,7 +734,7 @@ def cmd_embed(root, cfg):
 
 # ---------- Messung ----------
 def cmd_eval(root, cfg, a):
-    c = connect(root, cfg)
+    c = require_index(root, cfg)
     gold = [json.loads(l) for l in Path(a.golden).read_text(encoding="utf-8").splitlines() if l.strip()]
     variants = {"BM25": dict(graph=False, dense=False, filename=False, decision=False),
                 "BM25 + Dateiname": dict(graph=False, dense=False, filename=True, decision=False),
@@ -635,6 +756,8 @@ def cmd_eval(root, cfg, a):
             rk = next((i + 1 for i, h in enumerate(res["results"]) if h["path"] in exp), None)
             ranks.append(rk)
         n = len(ranks)
+        if not n:
+            raise WikitilaError(f"Golden Set {a.golden} enthält keine Fälle.")
         rec = lambda k: sum(1 for x in ranks if x and x <= k) / n
         mrr = sum(1 / x for x in ranks if x) / n
         print(f"{name:28s} R@1 {rec(1):.2f} R@3 {rec(3):.2f} R@5 {rec(5):.2f} R@10 {rec(10):.2f} MRR {mrr:.3f} "
@@ -646,7 +769,7 @@ def cmd_eval(root, cfg, a):
 
 
 def cmd_status(root, cfg):
-    c = connect(root, cfg)
+    c = connect(root, cfg, create=False)
     q = lambda s: c.execute(s).fetchone()[0]
     built = c.execute("select v from meta where k='built'").fetchone()
     print(f"Dateien {q('select count(*) from files')}, Abschnitte {q('select count(*) from t')}, "
@@ -654,6 +777,8 @@ def cmd_status(root, cfg):
           f"Vektoren {q('select count(*) from emb')}, Stand {built[0] if built else '-'}")
     print("Embedding:", "an" if cfg["embedding"]["enabled"] else "aus", "| Decision-Modell:",
           cfg["decision"]["model"] if cfg["decision"]["enabled"] else "aus")
+    for w in cfg["_authority"].get("warnings", []):
+        print("Hinweis:", w)
 
 
 def cmd_manifest(root: Path, cfg: dict, a):
@@ -663,15 +788,18 @@ def cmd_manifest(root: Path, cfg: dict, a):
     (Markdown laut Entscheidung 2026-11-14); alles andere wird als „nach Typ ausgeschlossen“ geführt.
     """
     from collections import Counter
-    c = connect(root, cfg)
-    indexed = [p for (p,) in c.execute("select path from files")]
+    db = root / cfg["index"]["db"]
+    indexed = []
+    if db.exists():
+        with contextlib.closing(connect(root, cfg)) as c:
+            indexed = [p for (p,) in c.execute("select path from files")]
     pats = load_ignore(root, cfg)
     exts = tuple(cfg["corpus"]["include_ext"])
     disk = Counter()
     indexed_ext = Counter(Path(p).suffix.lower() or "(none)" for p in indexed)
     excl_type = Counter()
     excl_ignore = Counter()
-    oversized = 0
+    oversized = unreadable = outside = 0
     for r, dirs, files in os.walk(root):
         rr = os.path.relpath(r, root).replace(os.sep, "/")
         rr = "" if rr == "." else rr
@@ -686,8 +814,14 @@ def cmd_manifest(root: Path, cfg: dict, a):
             disk[ext] += 1
             if not n.endswith(exts):
                 excl_type[ext] += 1
-            elif (root / rel).stat().st_size > 600_000:
-                oversized += 1
+            elif not inside_root(root, rel):
+                outside += 1   # Symlink aus dem Ordner heraus oder ins Leere (F7)
+            else:
+                try:
+                    if (root / rel).stat().st_size > MAX_FILE_BYTES:
+                        oversized += 1
+                except OSError:
+                    unreadable += 1
     total_disk = sum(disk.values())
     manifest = {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -700,16 +834,21 @@ def cmd_manifest(root: Path, cfg: dict, a):
             "excluded_type": sum(excl_type.values()),
             "excluded_ignore": sum(excl_ignore.values()),
             "oversized_skipped": oversized,
+            "oversized_limit_bytes": MAX_FILE_BYTES,
+            "symlink_outside_root": outside,
+            "unreadable": unreadable,
         },
         "indexed_by_ext": dict(sorted(indexed_ext.items())),
         "excluded_type_by_ext": dict(sorted(excl_type.items())),
         "excluded_ignore_by_ext": dict(sorted(excl_ignore.items())),
     }
-    mf = (root / cfg["index"]["db"]).parent / "source_manifest.json"
+    mf = db.parent / "source_manifest.json"
+    mf.parent.mkdir(parents=True, exist_ok=True)
     mf.write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"Source-Manifest: {total_disk} Dateien auf Disk, {len(indexed)} indexiert "
           f"({', '.join(exts)}), {sum(excl_type.values())} nach Typ ausgeschlossen, "
-          f"{sum(excl_ignore.values())} ignoriert, {oversized} zu groß übersprungen")
+          f"{sum(excl_ignore.values())} ignoriert, {oversized} zu groß übersprungen, "
+          f"{outside} Symlinks außerhalb, {unreadable} unlesbar")
     print("  Indexiert nach Typ:", ", ".join(f"{e} {n}" for e, n in sorted(indexed_ext.items())))
     print("  Ausgeschlossen (Top):", ", ".join(f"{e} {n}" for e, n in excl_type.most_common(8)))
     print(f"  Manifest: {mf}")
@@ -720,15 +859,17 @@ def cmd_check(root: Path, cfg: dict, a) -> bool:
 
     Rückgabe: True bei Drift (neu/geändert/entfernt), False wenn Index aktuell ist.
     """
-    c = connect(root, cfg)
-    known = {p: s for p, s in c.execute("select path, sha from files")}
+    db = root / cfg["index"]["db"]
+    known = {}
+    if db.exists():
+        with contextlib.closing(connect(root, cfg)) as c:
+            known = {p: s for p, s in c.execute("select path, sha from files")}
+    if not db.exists():
+        print(f"  Kein Index unter {db}.")
     seen = {}
     for rel in walk(root, cfg):
-        try:
-            raw = (root / rel).read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            continue
-        if len(raw) > 600_000:
+        raw = read_source(root, rel)
+        if raw is None:
             continue
         seen[rel] = hashlib.sha1(raw.encode("utf-8", "ignore")).hexdigest()
     new_changed = [p for p, s in seen.items() if known.get(p) != s]
@@ -750,16 +891,23 @@ def cmd_check(root: Path, cfg: dict, a) -> bool:
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--root", default=os.environ.get("WIKITILA_ROOT", "."))
+    ap.add_argument("--version", action="version", version=f"LLM-Wikitila {__version__}")
     sp = ap.add_subparsers(dest="cmd", required=True)
     sp.add_parser("build"); sp.add_parser("embed"); sp.add_parser("status"); sp.add_parser("manifest"); sp.add_parser("check")
     s = sp.add_parser("search"); s.add_argument("query"); s.add_argument("-k", type=int, default=5); s.add_argument("--json", action="store_true")
     e = sp.add_parser("eval"); e.add_argument("golden"); e.add_argument("--variants", action="store_true"); e.add_argument("--misses", action="store_true")
     a = ap.parse_args()
     root = Path(a.root).resolve()
-    cfg = load_cfg(root)
-    {"build": lambda: cmd_build(root, cfg), "embed": lambda: cmd_embed(root, cfg), "status": lambda: cmd_status(root, cfg),
-     "manifest": lambda: cmd_manifest(root, cfg, a), "check": lambda: cmd_check(root, cfg, a),
-     "search": lambda: cmd_search(root, cfg, a), "eval": lambda: cmd_eval(root, cfg, a)}[a.cmd]()
+    try:
+        cfg = load_cfg(root)
+        cmds = {"build": lambda: cmd_build(root, cfg), "embed": lambda: cmd_embed(root, cfg),
+                "status": lambda: cmd_status(root, cfg), "manifest": lambda: cmd_manifest(root, cfg, a),
+                "check": lambda: cmd_check(root, cfg, a), "search": lambda: cmd_search(root, cfg, a),
+                "eval": lambda: cmd_eval(root, cfg, a)}
+        cmds[a.cmd]()
+    except WikitilaError as e:
+        print(f"FEHLER: {e}", file=sys.stderr)
+        sys.exit(2)
 
 
 if __name__ == "__main__":

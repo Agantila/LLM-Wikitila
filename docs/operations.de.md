@@ -38,6 +38,10 @@ Kein Dienst, kein Autostart nötig. Für Automation genügt ein Cron-Eintrag ode
 
 ## Sicherheit
 
-- Der Index (`.wikitila/index.db`) enthält Volltext — wer ihn weitergibt, gibt Inhalte weiter. Er steht daher in `.gitignore`.
+- Der Index (`.wikitila/index.db`) enthält Volltext (unmaskiert) — wer ihn weitergibt, gibt Inhalte weiter. `.wikitila/` gehört in die `.gitignore` des Ziel-Ordners; `install.sh` trägt es dort ein, wenn der Ordner ein Git-Repo ist.
+- Maskiert werden alle Textfelder der Ausgabe: Passagen, Überschriften, Titel, Entitäts-Labels in `why`.
+- Symlinks, die aus dem Ordner herausführen (oder ins Leere zeigen), werden nicht indexiert und im Manifest als `symlink_outside_root` gezählt. Symlinks innerhalb des Ordners bleiben erlaubt.
+- Dateien über 600.000 Bytes werden übersprungen (vor dem Lesen geprüft; `build`, `check` und `manifest` zählen gleich).
+- Lesebefehle (`search`, `eval`, `embed`, `status`) legen keinen Index an: Fehlt er oder ist er leer, endet der Aufruf mit Exit-Code 2 statt mit einem scheinbaren `nicht_belegt`.
 - Fundstellen maskieren Schlüssel und Passwörter (`mask_secrets`, Vorgabe an); die Dateien selbst bleiben auffindbar.
 - Alles läuft lokal, nichts geht an eine Cloud.

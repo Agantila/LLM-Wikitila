@@ -10,7 +10,7 @@ LLM-Wikitila is a **local, evidence-oriented hybrid**: deterministic full-text s
 
 | Component | Role | Technique |
 |---|---|---|
-| **Search core** | Full-text ranking | SQLite FTS5 / BM25, stem-prefix, weights title 6 · heading 3 · body 1 |
+| **Search core** | Full-text ranking | SQLite FTS5 / BM25, stem-prefix, weights title 6 · heading 3 · body 1; section → file mapping in the indexed `chunks` table (ADR-002) |
 | **Filename** | Makes identifiers findable (ADR numbers etc.) | Filename stem is indexed + small boost |
 | **Link graph** | Deterministic links | Filenames, wikilinks, Markdown links, ADR numbers — no LLM |
 | **Entity graph** | Small ranking boost | Graphify entities (document → entity), weight 0.05 |

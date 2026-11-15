@@ -41,7 +41,16 @@ Three levels:
 | File recall | R@10 **1.00**, MRR 0.785, p95 ~35 ms |
 | Passage presence (top-1, full passages) | 45% |
 | Abstention signal on negative cases | 8/8 |
-| Unit tests | 18/18 |
+| Unit tests | 18/18 (at measurement time; currently 32/32) |
+
+**Target check:** R@10 meets the target ≥ 0.95. MRR 0.785 is **below** the target 0.80 — open backlog item (`pm/BACKLOG.md`, B-010).
+
+**Reproducibility:** The reference values come from the private vault and cannot be re-measured from the repo. The tool chain itself can be checked with the demo corpus (also runs in CI):
+
+```bash
+python3 wikitila.py --root examples/demo-corpus build
+python3 validate_catalog.py --root examples/demo-corpus --catalog golden_catalog.example.jsonl
+```
 
 ## Measurement limits (honest)
 

@@ -42,6 +42,10 @@ The register answers **"which file is authoritative for this topic"** and **"is 
 
 **Effect:** Queries that hit `prices_old.md` are redirected to `prices_current.md` ("überholt durch"), the successor gets `kanonisch` and the passage containing `549`. When a query matches a register topic (via `scope`), the canonical file is surfaced — this resolves terminology mismatches ("search architecture" vs. a file named "search layer").
 
+## Validation on load
+
+The register is validated on load. Unreadable JSON, a missing `entries` list, entries without `canonical`, a `stale_after` not in `YYYY-MM-DD`, or a `supersedes` that is not a list produce a `Hinweis` in `search` (field `warnings`) and `status`. Invalid entries or fields are skipped; search continues. A silently ignored register no longer exists.
+
 ## Agent rules
 
 1. Before any reliable answer on a register topic, read the entry and use the `canonical` file as the source.

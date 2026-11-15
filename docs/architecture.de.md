@@ -10,7 +10,7 @@ LLM-Wikitila ist ein **lokaler, evidenzorientierter Hybrid**: deterministische V
 
 | Baustein | Rolle | Technik |
 |---|---|---|
-| **Suchkern** | Volltext-Ranking | SQLite FTS5 / BM25, Wortstamm-Präfix, Gewichte Titel 6 · Überschrift 3 · Text 1 |
+| **Suchkern** | Volltext-Ranking | SQLite FTS5 / BM25, Wortstamm-Präfix, Gewichte Titel 6 · Überschrift 3 · Text 1; Zuordnung Abschnitt → Datei in der indexierten Tabelle `chunks` (ADR-002) |
 | **Dateiname** | Identifier auffindbar (ADR-Nummern u. ä.) | Dateinamen-Stamm wird mitindexiert + kleiner Booster |
 | **Link-Graph** | deterministische Verknüpfungen | Dateinamen, Wikilinks, Markdown-Links, ADR-Nummern — ohne LLM |
 | **Entitätsgraph** | kleiner Ranking-Booster | Graphify-Entitäten (Dokument → Entität), Gewicht 0,05 |

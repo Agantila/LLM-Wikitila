@@ -47,7 +47,7 @@ Antwortfelder: `results` (Datei, `heading`, `passages` = Originalpassagen, `scor
 ## 5. Validierung
 
 - Fragenkatalog (JSONL, Schema: `docs/validation.de.md`) anlegen und mit `python3 validate_catalog.py --root . --catalog <katalog>` messen (Datei-Recall, Passagen-Präsenz, Coverage/Negativ).
-- Referenzwerte: R@10 1,00 · MRR 0,785 · Passagen 45 % · Abstention-Signal 8/8 · 18/18 Tests.
+- Referenzwerte: R@10 1,00 · MRR 0,785 · Passagen 45 % · Abstention-Signal 8/8 · 18/18 Tests zum Messzeitpunkt (aktuell 32/32). MRR liegt unter dem Ziel 0,80 (Backlog B-010).
 - Datei-Recall ist **kein** Nachweis für Antwortqualität.
 
 ## 6. Wissensgraph (optional)
