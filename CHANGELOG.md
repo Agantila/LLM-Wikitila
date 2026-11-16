@@ -8,6 +8,7 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen 
 - `install.sh` und `wikitila` sind im Repository als ausführbar markiert. Vorher scheiterte `./install.sh` nach einem frischen Klon mit „Permission denied“.
 
 ### Doku und Projektmanagement
+- Repository veröffentlicht: `Agantila/LLM-Wikitila` ist öffentlich, `main` und Tag `v0.2.0` sind gepusht, CI auf Python 3.11 bis 3.13 grün.
 - Lokale Veröffentlichungsbereitschaft erneut geprüft. Status und Backlog weisen das vorhandene `gh`-Konto sowie die ausstehende ausdrückliche Freigabe für das öffentliche Anlegen aus.
 
 ## [0.2.0] — 2026-11-15

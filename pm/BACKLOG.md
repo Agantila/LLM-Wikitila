@@ -6,7 +6,6 @@ Priorität: P1 = als Nächstes · P2 = bald · P3 = bei Gelegenheit. Status: ✅
 
 | ID | Prio | Status | Thema | Bezug |
 |---|---|---|---|---|
-| B-001 | P1 | ⏳ | Veröffentlichung als öffentliches Repo `Agantila/LLM-Wikitila`: Repo anlegen, `main` und Tag `v0.2.0` pushen, CI grün auf 3.11 bis 3.13. Lokale Abnahme erneut grün; `gh`-Konto Agantila vorhanden. Nach Owner-Entscheidung vorerst keine externe Aktion; Veröffentlichung nur nach ausdrücklicher Freigabe | ROADMAP 0.2.0 |
 | B-010 | P2 | ⏳ | MRR 0,776 (Owner-Messung 2026-11-15) → ≥ 0,80: verfehlte Ränge am Owner-Vault analysieren (nicht im Repo messbar) | validation.md |
 | B-011 | P2 | ⏳ | Link-Graph inkrementell statt komplett neu bauen (Regex über alle Texte bei jedem Build) | Review Phase C |
 | B-012 | P3 | ⏳ | BM25-Kosten bei sehr häufigen Termen (Query mit ca. 1.500 Treffern: 50 ms): ggf. `limit` vor dem Ranking oder Ausschluss häufiger Terme messen | Review Phase C |
@@ -30,3 +29,4 @@ Priorität: P1 = als Nächstes · P2 = bald · P3 = bei Gelegenheit. Status: ✅
 | B-110 | F13 PyPI-Name `graphifyy` gepinnt, MRR-Ziel offen dokumentiert, Demo-Korpus | 2026-11-15 | — |
 | B-111 | PM-Struktur, Memory, CI, Repo-Vorlagen | 2026-11-15 | — |
 | B-002 | Installation im Referenz-Vault von der alten Kopie (`.sbs/`) auf Release-Worktree `v0.2.0` umgestellt, `.wikitila/` gitignored, Werkzeug-Repo aus Vault-Index entfernt | 2026-11-15 | Entscheidung im Vault |
+| B-001 | Öffentliches Repo `Agantila/LLM-Wikitila` angelegt, `main` und Tag `v0.2.0` gepusht, CI auf Python 3.11 bis 3.13 grün | 2026-11-16 | Sitzung 2026-11-16-veroeffentlichung-github |

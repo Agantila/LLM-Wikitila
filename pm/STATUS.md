@@ -1,6 +1,6 @@
 # Status
 
-**Stand:** 2026-11-15 · **Version:** 0.2.0 (Tag `v0.2.0` auf `main`, lokal; kein Remote konfiguriert)
+**Stand:** 2026-11-16 · **Version:** 0.2.0 (Tag `v0.2.0` auf `main`, veröffentlicht) · **Repo:** <https://github.com/Agantila/LLM-Wikitila>
 
 **Einsatz:** Erster Produktiveinsatz im Referenz-Vault des Owners über einen Release-Worktree (siehe [Einsatz](#einsatz))
 
@@ -9,6 +9,7 @@
 | Gate | Wert |
 |---|---|
 | Unit-Tests | ✅ 32/32 (lokal Python 3.14.8) |
+| GitHub-CI | ✅ 3/3 grün auf Python 3.11, 3.12, 3.13 (Run 43933622720) |
 | Demo-Katalog (`examples/demo-corpus`) | ✅ R@10 1,00 · MRR 1,000 |
 | Installer-Rauchtest (temporärer Ordner) | ✅ Installation, Index, `.gitignore`, Suche |
 | Referenz-Vault (Owner-Messung 2026-11-15, v0.2.0, 1.459 Dateien) | R@10 1,00 ✅ · MRR 0,776 ⚠️ (Ziel 0,80) · Abstention-Signal 8/8 |
@@ -16,6 +17,7 @@
 
 ## Zuletzt erledigt
 
+- Repository veröffentlicht: `Agantila/LLM-Wikitila` ist öffentlich, `main` und Tag `v0.2.0` sind gepusht, CI auf Python 3.11 bis 3.13 grün (B-001 erledigt).
 - Lokale Veröffentlichungsabnahme erneut bestätigt: Tests, Demo-Katalog und Installer-Rauchtest grün; `gh`-Konto Agantila vorhanden. Auf Owner-Entscheidung wurde keine externe Aktion ausgeführt.
 - Review 2026-11-15 umgesetzt (F1 bis F13), siehe [plans/2026-11-15-review-fixes.md](plans/2026-11-15-review-fixes.md).
 - PM-Struktur, Memory, CI und Repo-Vorlagen angelegt.
@@ -24,9 +26,9 @@
 
 ## Offen / nächster Schritt
 
-1. ⏳ **B-001:** Veröffentlichung als öffentliches Repo `Agantila/LLM-Wikitila`. Lokale Vorbereitung und Abnahme abgeschlossen; Zielkonto vorhanden, Zielrepository noch nicht vorhanden. Repo anlegen, `main` und Tag pushen sowie CI-Matrix 3.11 bis 3.13 prüfen erst nach ausdrücklicher Owner-Freigabe.
-2. ⏳ **B-010:** MRR auf ≥ 0,80 heben (Messung nur am Owner-Vault, Analyse der verfehlten Ränge).
-3. ⏳ **B-011:** Link-Graph inkrementell bauen (inkrementeller Build bei 10.000 Dateien: 1,9 s, dominiert vom kompletten Link-Neuaufbau).
+1. ⏳ **B-010:** MRR auf ≥ 0,80 heben (Messung nur am Owner-Vault, Analyse der verfehlten Ränge).
+2. ⏳ **B-011:** Link-Graph inkrementell bauen (inkrementeller Build bei 10.000 Dateien: 1,9 s, dominiert vom kompletten Link-Neuaufbau).
+3. ⏳ **B-013:** Release-Signierung (signierte Tags) prüfen. Actions sind bereits auf Commit-SHA gepinnt und werden per Dependabot aktualisiert.
 
 ## Einsatz
 
