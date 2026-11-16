@@ -1,6 +1,6 @@
 # Status
 
-**Stand:** 2026-11-15 · **Version:** 0.2.0 (Tag `v0.2.0` auf `main`, lokal; noch nicht auf GitHub)
+**Stand:** 2026-11-15 · **Version:** 0.2.0 (Tag `v0.2.0` auf `main`, lokal; kein Remote konfiguriert)
 
 **Einsatz:** Erster Produktiveinsatz im Referenz-Vault des Owners über einen Release-Worktree (siehe [Einsatz](#einsatz))
 
@@ -8,13 +8,15 @@
 
 | Gate | Wert |
 |---|---|
-| Unit-Tests | ✅ 32/32 |
+| Unit-Tests | ✅ 32/32 (lokal Python 3.14.8) |
 | Demo-Katalog (`examples/demo-corpus`) | ✅ R@10 1,00 · MRR 1,000 |
+| Installer-Rauchtest (temporärer Ordner) | ✅ Installation, Index, `.gitignore`, Suche |
 | Referenz-Vault (Owner-Messung 2026-11-15, v0.2.0, 1.459 Dateien) | R@10 1,00 ✅ · MRR 0,776 ⚠️ (Ziel 0,80) · Abstention-Signal 8/8 |
 | Build 10.000 Dateien (synthetisch) | ✅ 3,2 s (vorher 65,5 s) |
 
 ## Zuletzt erledigt
 
+- Lokale Veröffentlichungsabnahme erneut bestätigt: Tests, Demo-Katalog und Installer-Rauchtest grün; `gh`-Konto Agantila vorhanden. Auf Owner-Entscheidung wurde keine externe Aktion ausgeführt.
 - Review 2026-11-15 umgesetzt (F1 bis F13), siehe [plans/2026-11-15-review-fixes.md](plans/2026-11-15-review-fixes.md).
 - PM-Struktur, Memory, CI und Repo-Vorlagen angelegt.
 - Veröffentlichung vorbereitet: Historie auf die Noreply-Adresse von Agantila umgeschrieben, interne Vault-Details neutralisiert, Tag `v0.2.0` neu gesetzt, Skripte ausführbar.
@@ -22,7 +24,7 @@
 
 ## Offen / nächster Schritt
 
-1. 🟡 **B-001:** Veröffentlichung als öffentliches Repo `Agantila/LLM-Wikitila`. Vorbereitung erledigt, es fehlt die Anmeldung der `gh`-CLI als Agantila, dann Repo anlegen und pushen.
+1. ⏳ **B-001:** Veröffentlichung als öffentliches Repo `Agantila/LLM-Wikitila`. Lokale Vorbereitung und Abnahme abgeschlossen; Zielkonto vorhanden, Zielrepository noch nicht vorhanden. Repo anlegen, `main` und Tag pushen sowie CI-Matrix 3.11 bis 3.13 prüfen erst nach ausdrücklicher Owner-Freigabe.
 2. ⏳ **B-010:** MRR auf ≥ 0,80 heben (Messung nur am Owner-Vault, Analyse der verfehlten Ränge).
 3. ⏳ **B-011:** Link-Graph inkrementell bauen (inkrementeller Build bei 10.000 Dateien: 1,9 s, dominiert vom kompletten Link-Neuaufbau).
 

@@ -7,6 +7,9 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen 
 ### Behoben
 - `install.sh` und `wikitila` sind im Repository als ausführbar markiert. Vorher scheiterte `./install.sh` nach einem frischen Klon mit „Permission denied“.
 
+### Doku und Projektmanagement
+- Lokale Veröffentlichungsbereitschaft erneut geprüft. Status und Backlog weisen das vorhandene `gh`-Konto sowie die ausstehende ausdrückliche Freigabe für das öffentliche Anlegen aus.
+
 ## [0.2.0] — 2026-11-15
 
 Umsetzung des Reviews [review/report-2026-11-15.md](review/report-2026-11-15.md), Plan: [pm/plans/2026-11-15-review-fixes.md](pm/plans/2026-11-15-review-fixes.md).
