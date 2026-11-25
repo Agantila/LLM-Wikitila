@@ -65,6 +65,7 @@ def main() -> None:
     neg_total = neg_nonempty = 0
     pos_false_abstain = 0
     neg_signal = 0
+    neg_coverage_partial = 0
     neg_detail = []
 
     for g in gold:
@@ -113,6 +114,8 @@ def main() -> None:
                 neg_detail.append((g["q"], res[0]["path"] if res else "-", (res[0]["snippet"][:70] if res else "")))
             if full.get("unmatched_terms") or full.get("top1_missing_terms"):
                 neg_signal += 1
+            if full.get("term_coverage", 1.0) < 1.0:
+                neg_coverage_partial += 1
 
     # --- Auswertung ---
     n = len(ranks)
@@ -158,6 +161,7 @@ def main() -> None:
     fp = neg_nonempty / max(1, neg_total)
     print(f"Falsch-positive (keine Abstention): {neg_nonempty}/{neg_total} ({fp:.0%})")
     print(f"Abstention-Signal vorhanden (unmatched_terms/top1_missing_terms): {neg_signal}/{neg_total}")
+    print(f"Coverage-Note < 1,0 (term_coverage/uncovered): {neg_coverage_partial}/{neg_total}")
     if neg_detail:
         print("  Beispiele (Frage -> gelieferter Treffer):")
         for q, p, s in neg_detail:

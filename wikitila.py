@@ -6,6 +6,7 @@ Eine SQLite-Datei: FTS5 (BM25), Link-Graph, Entitäten aus Graphify, optionale V
 
   wikitila.py build   [--root DIR]           Index aufbauen oder aktualisieren (inkrementell)
   wikitila.py search  "Frage" [-k 5] [--json]
+  wikitila.py coverage "Frage" [--json]      Coverage-Note (Antwortabdeckung, ohne Ranking)
   wikitila.py eval    golden.jsonl [--variants]   Messung gegen ein Golden Set
   wikitila.py embed                          optional: Vektoren mit einem Ollama-Modell
   wikitila.py status
@@ -23,7 +24,7 @@ try:
 except ModuleNotFoundError:  # Python < 3.11
     tomllib = None
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 MAX_FILE_BYTES = 600_000   # Dateien darüber werden übersprungen (Bytes, in build/check/manifest gleich)
 
 
@@ -47,7 +48,7 @@ DEFAULTS = {
 
 STOP = set("""der die das den dem des ein eine einen einem einer und oder ist sind wird werden wie was wer wo welche welcher
 welches wir ich mit ohne für bei auf in im zu zum zur von vom aus nach vor über unter auch nicht nur noch dass damit muss
-müssen soll sollen kann können hat haben wofür worauf wann warum nutzen nutzt aktuell the and for with what how which""".split())
+müssen soll sollen kann können hat haben wofür worauf wann warum nutzen nutzt aktuell gelten gilt gibt geben the and for with what how which""".split())
 
 SECRET_RES = [
     re.compile(r"\b(sk|pk|rk)-[A-Za-z0-9_\-]{16,}"), re.compile(r"\bAKIA[0-9A-Z]{12,}"),
@@ -231,7 +232,9 @@ def chunk_text(body: str, cap: int, mn: int) -> list[tuple[str, str]]:
     out = []
     for sec in re.split(r"(?m)^(?=#{1,3}\s)", body):
         sec = sec.strip()
-        if len(sec) < mn:
+        # Kurze Abschnitte mit Überschrift und Inhalt behalten („## Schrift · Bai Jamjuree“);
+        # nur Überschriften ohne Inhalt oder kurzer Text ohne Überschrift entfallen.
+        if len(sec) < mn and ("\n" not in sec or not sec.startswith("#")):
             continue
         head = sec.split("\n", 1)[0].lstrip("# ").strip()
         cur = ""
@@ -248,7 +251,7 @@ def chunk_text(body: str, cap: int, mn: int) -> list[tuple[str, str]]:
             cur += ("\n\n" if cur else "") + para
         if cur.strip():
             out.append((head, cur))
-    return [(h, c) for h, c in out if len(c.strip()) >= mn]
+    return [(h, c) for h, c in out if len(c.strip()) >= mn or (h and "\n" in c)]
 
 
 def connect(root: Path, cfg: dict, create: bool = True) -> sqlite3.Connection:
@@ -323,10 +326,14 @@ def cmd_build(root: Path, cfg: dict):
         search_title = base + " " + Path(rel).stem   # Dateinamen-Stamm durchsuchbar (ADR-Nummern, Identifier)
         delete_doc(c, rel)
         desc = fm.get("description", "")
+        # Frontmatter-Metadaten durchsuchbar machen: status (proposed/accepted/…) und
+        # superseded_by tragen Antworten, die sonst nicht auffindbar wären („verbindlich beschlossen?“ -> „proposed“).
+        fm_extra = " ".join(x for x in (fm.get("status", ""), fm.get("superseded_by", "")) if x)
+        title_field = " ".join(x for x in (search_title, desc, fm_extra) if x)
         chs = chunk_text(body, cap, mn) or [(base, base + (" " + body.strip() if body.strip() else ""))]  # Kurzdatei bleibt über den Titel auffindbar
         for head, ch in chs:
             cur = c.execute("insert into t(title, head, body, path) values (?,?,?,?)",
-                            (search_title + (" " + desc if desc else ""), head, ch, rel))
+                            (title_field, head, ch, rel))
             c.execute("insert into chunks(cid, path) values (?,?)", (cur.lastrowid, rel))
         c.execute("insert or replace into files values (?,?,?,?,?,?)",
                   (rel, sha, base, fm.get("status", ""), fm.get("superseded_by", ""), desc))
@@ -407,7 +414,8 @@ def cmd_build(root: Path, cfg: dict):
 
 # ---------- Suche ----------
 def tokens(q: str) -> list[str]:
-    return [t for t in re.findall(r"\w+", q.lower()) if len(t) > 2 and t not in STOP]
+    # Zahlen bleiben erhalten (Preise, Kennzahlen); einzelne Ziffern entfallen (Rauschen).
+    return [t for t in re.findall(r"\w+", q.lower()) if t not in STOP and (len(t) > 2 or (len(t) == 2 and t.isdigit()))]
 
 
 def fts_query(q: str, stem: bool) -> str | None:
@@ -420,11 +428,13 @@ def fts_query(q: str, stem: bool) -> str | None:
 def file_scores(lists: list[list[int]], cpath: dict, k: int) -> dict:
     sc = defaultdict(float)
     for lst in lists:
-        best = {}
+        ranks: dict[str, list[int]] = defaultdict(list)
         for r, cid in enumerate(lst):
-            best.setdefault(cpath[cid], r)
-        for p, r in best.items():
-            sc[p] += 1 / (k + r + 1)
+            p = cpath[cid]
+            if len(ranks[p]) < 3:          # bis zu drei Chunks je Datei einfließen lassen
+                ranks[p].append(r)
+        for p, rs in ranks.items():
+            sc[p] += sum(1 / (k + r + 1) for r in rs)
     return sc
 
 
@@ -484,6 +494,68 @@ def decide_systemone(cfg, q: str, cands: list[tuple[str, str]]) -> list[float]:
     return out
 
 
+def _chunks_with_values(c, path: str, vals: list[str]) -> list[int]:
+    """Chunks einer Datei, die Register-Werte enthalten (unmaskierter Body).
+
+    Register-Werte sind oft Daten (Preise, Kennzahlen) und keine Query-Token — BM25
+    hebt solche Chunks nicht hervor. Kompakt notierte Werte („549/899/1.199“) werden
+    in Atome zerlegt und einzeln gesucht, damit ein Chunk mit „549 EUR“ gefunden wird.
+    Rückgabe absteigend nach Anzahl getroffener Atome (bester Beleg zuerst).
+    """
+    if not vals:
+        return []
+    atoms = {a for v in vals for a in re.split(r"[\s/,;·|]+", v) if a}
+    if not atoms:
+        return []
+    hits = []
+    for cid, bd in in_rows(c, "select rowid, body from t where rowid in ({q})", chunk_ids(c, path)):
+        n = sum(1 for a in atoms if a in bd)
+        if n:
+            hits.append((n, cid))
+    hits.sort(key=lambda x: -x[0])
+    return [cid for _, cid in hits]
+
+
+def coverage_grade(c, cfg, q: str) -> dict:
+    """Deterministische Coverage-Note (Analog zu Auto Ontologys `check_answerable`).
+
+    Ein signifikanter Query-Token gilt als „gedeckt“, wenn er in mindestens einem
+    Chunk zusammen mit einem anderen signifikanten Token vorkommt (Ko-Lokation).
+    Nahe-am-Thema-Fragen („Safe Zones für Pinterest“) treffen die Begriffe nur
+    verstreut — `uncovered` nennt den isolierten Begriff, `term_coverage` ist < 1.
+    Kein Modell, nur FTS5.
+    """
+    r = cfg["rank"]
+    toks = tokens(q)
+    if not toks:
+        return {"term_coverage": 1.0, "uncovered": [], "uncovered_hint": {}}
+    chunks_of: dict[str, set[int]] = {}
+    hint: dict[str, str] = {}
+    for t in toks:
+        fq_t = f'"{t[:-2]}"*' if (r["stem_prefix"] and len(t) >= 7) else f'"{t}"'
+        try:
+            ids = [cid for (cid,) in c.execute("select rowid from t where t match ? limit 60", (fq_t,)).fetchall()]
+        except Exception:
+            ids = []
+        chunks_of[t] = set(ids)
+        if ids:
+            hint[t] = next((p for (p,) in c.execute("select path from chunks where cid=?", (ids[0],))), "")
+    if len(toks) == 1:
+        t = toks[0]
+        return {"term_coverage": 1.0 if chunks_of[t] else 0.0,
+                "uncovered": [] if chunks_of[t] else [t],
+                "uncovered_hint": {t: hint.get(t, "")} if not chunks_of[t] else {}}
+    covered, uncovered = [], []
+    for t in toks:
+        if any(chunks_of[t] & chunks_of[o] for o in toks if o != t):
+            covered.append(t)
+        else:
+            uncovered.append(t)
+    return {"term_coverage": round(len(covered) / len(toks), 3),
+            "uncovered": uncovered,
+            "uncovered_hint": {t: hint.get(t, "") for t in uncovered}}
+
+
 def search(c, cfg, q: str, k=5, *, graph=True, dense=None, filename=True, decision=None) -> dict:
     r = cfg["rank"]
     dense = cfg["embedding"]["enabled"] if dense is None else dense
@@ -491,6 +563,7 @@ def search(c, cfg, q: str, k=5, *, graph=True, dense=None, filename=True, decisi
     lists, why = [], defaultdict(list)
     reg = cfg.get("_authority") or {}
     why["_warn"].extend(reg.get("warnings", []))
+    auth_events: list[str] = []   # für den Trace: welche Register-Regeln gezogen haben
     fq = fts_query(q, r["stem_prefix"])
     bm = []
     bm25_top = None
@@ -555,6 +628,7 @@ def search(c, cfg, q: str, k=5, *, graph=True, dense=None, filename=True, decisi
             if old in sc and new in meta:
                 sc[new] = max(sc.get(new, 0.0), sc[old] * 1.05)
                 why[new].append(f"kanonisch (löst {os.path.basename(old)} ab)")
+                auth_events.append(f"Register: {os.path.basename(new)} löst {os.path.basename(old)} ab")
                 if new not in best_chunks:
                     vals = reg.get("meta", {}).get(new, {}).get("value") or []
                     if vals:
@@ -577,6 +651,7 @@ def search(c, cfg, q: str, k=5, *, graph=True, dense=None, filename=True, decisi
             if canon in meta and any(t in alias for t in qtoks):
                 sc[canon] = max(sc.get(canon, 0.0), 0.015)   # nur einordnen, starkes BM25 nicht verdrängen
                 why[canon].append("kanonisch (Thema im Register)")
+                auth_events.append(f"Register-Thema: {os.path.basename(canon)}")
                 if canon not in best_chunks:
                     vals = m.get("value") or []
                     if vals:
@@ -612,8 +687,13 @@ def search(c, cfg, q: str, k=5, *, graph=True, dense=None, filename=True, decisi
             note = f"Decision-Modell Rückfall: {str(e)[:60]}"
     out = []
     for p, s in ranked[:k]:
+        rm = reg.get("meta", {}).get(p, {}) if reg else {}
+        vals = rm.get("value") or []
         rows = []
-        for cid in best_chunks.get(p, []):
+        cids = _chunks_with_values(c, p, vals) if vals else []   # Wert-Chunks zuerst (Passagen-Präsenz)
+        if not cids:
+            cids = best_chunks.get(p, [])
+        for cid in cids:
             row = c.execute("select head, body from t where rowid=?", (cid,)).fetchone()
             if row:
                 rows.append(row)
@@ -627,7 +707,6 @@ def search(c, cfg, q: str, k=5, *, graph=True, dense=None, filename=True, decisi
             body = re.sub(r"\s+", " ", body).strip()
             passages.append({"heading": mk(head), "body": mk(body)})
         snippet = passages[0]["body"][:260]
-        rm = reg.get("meta", {}).get(p, {}) if reg else {}
         today = time.strftime("%Y-%m-%d")
         stale = isinstance(rm.get("stale_after"), str) and rm["stale_after"] < today
         unverified = bool(rm) and (not rm.get("confirmed") or rm.get("status") in ("proposed", "draft"))
@@ -637,8 +716,10 @@ def search(c, cfg, q: str, k=5, *, graph=True, dense=None, filename=True, decisi
                     "why": list(dict.fromkeys(why[p]))[:4],   # Labels schon beim Erzeugen maskiert; Dateinamen bleiben lesbar
                     "superseded_by": sup_by or None,
                     "canonical": bool(rm.get("authority") == "canonical"),
+                    "authority": mk(rm.get("authority")) if rm.get("authority") else None,
+                    "verified_at": rm.get("verified_at"),
                     "stale": stale, "unverified": unverified})
-    # --- Antwort-Tor (P0-4, modellfrei): vier Antwortstatus + Signale ---
+    # --- Antwort-Tor (modellfrei): vier Antwortstatus + Signale ---
     toks = tokens(q)
     matched = set()
     for t in toks:
@@ -654,21 +735,28 @@ def search(c, cfg, q: str, k=5, *, graph=True, dense=None, filename=True, decisi
         t1 = " ".join([out[0]["title"], out[0]["heading"]] +
                       [p["heading"] + " " + p["body"] for p in out[0]["passages"]]).lower()
         top1_missing = [t for t in toks if t in matched and t not in t1]
+    gate_reason = ""
     if not ranked:
-        answer_status = "nicht_belegt"
+        answer_status = "nicht_belegt"; gate_reason = "keine Treffer"
     elif any(h.get("superseded_by") for h in out):
-        answer_status = "widersprüchlich"
+        answer_status = "widersprüchlich"; gate_reason = "abgelöste Quelle im Ergebnis (Auflösung sichtbar)"
     elif out and out[0].get("unverified"):
-        answer_status = "belegt_gueltigkeit_unbestaetigt"
+        answer_status = "belegt_gueltigkeit_unbestaetigt"; gate_reason = "Top-1-Gültigkeit nicht bestätigt"
     else:
-        answer_status = "belegt"
+        answer_status = "belegt"; gate_reason = "Top-1 belegt"
     if unmatched:
         why["_warn"].append("Begriffe ohne Treffer im Repository: " + ", ".join(unmatched))
     if top1_missing:
         why["_warn"].append("Begriffe nicht im Top-1-Ergebnis: " + ", ".join(top1_missing))
+    cov = coverage_grade(c, cfg, q)
+    if cov["uncovered"]:
+        why["_warn"].append("Begriffe ohne ko-lokalen Beleg: " + ", ".join(cov["uncovered"]))
+    trace = {"query_tokens": toks, "authority": auth_events, "gate": gate_reason}
     return {"results": out, "note": note, "warnings": why.get("_warn", []),
             "answer_status": answer_status, "unmatched_terms": unmatched,
-            "top1_missing_terms": top1_missing, "bm25_top": bm25_top}
+            "top1_missing_terms": top1_missing, "term_coverage": cov["term_coverage"],
+            "uncovered": cov["uncovered"], "uncovered_hint": cov["uncovered_hint"],
+            "trace": trace, "bm25_top": bm25_top}
 
 
 def require_index(root, cfg) -> sqlite3.Connection:
@@ -702,8 +790,28 @@ def cmd_search(root, cfg, a):
         print(f"{i}. {h['path']}{flag}\n   {h['title']} > {h['heading']}\n   {h['snippet']}\n   ({', '.join(h['why'])})")
     for w in res["warnings"] + ([res["note"]] if res["note"] else []):
         print("Hinweis:", w)
+    if res.get("uncovered"):
+        print(f"Term-Abdeckung: {res['term_coverage']:.2f} (ohne ko-lokalen Beleg: {', '.join(res['uncovered'])})")
     extra = f" (bm25_top {res['bm25_top']:.2f})" if res.get("bm25_top") is not None else ""
     print(f"Antwortstatus: {res.get('answer_status')}{extra}")
+    print(f"{dt:.0f} ms")
+
+
+def cmd_coverage(root, cfg, a):
+    """Pre-Flight: wie gut deckt der Index die Frage ab (ohne Ranking). Analog zu `check_answerable`."""
+    c = require_index(root, cfg)
+    t0 = time.time()
+    cov = coverage_grade(c, cfg, a.query)
+    dt = (time.time() - t0) * 1000
+    if a.json:
+        print(json.dumps({**cov, "ms": round(dt)}, ensure_ascii=False, indent=1)); return
+    print(f"Frage: {a.query}")
+    print(f"Term-Abdeckung: {cov['term_coverage']:.2f}")
+    if cov.get("uncovered"):
+        print("Ohne ko-lokalen Beleg:")
+        for t in cov["uncovered"]:
+            hint = cov.get("uncovered_hint", {}).get(t, "")
+            print(f"  - {t}" + (f"  (nur in {hint})" if hint else "  (kein Treffer)"))
     print(f"{dt:.0f} ms")
 
 
@@ -895,6 +1003,7 @@ def main():
     sp = ap.add_subparsers(dest="cmd", required=True)
     sp.add_parser("build"); sp.add_parser("embed"); sp.add_parser("status"); sp.add_parser("manifest"); sp.add_parser("check")
     s = sp.add_parser("search"); s.add_argument("query"); s.add_argument("-k", type=int, default=5); s.add_argument("--json", action="store_true")
+    cv = sp.add_parser("coverage"); cv.add_argument("query"); cv.add_argument("--json", action="store_true")
     e = sp.add_parser("eval"); e.add_argument("golden"); e.add_argument("--variants", action="store_true"); e.add_argument("--misses", action="store_true")
     a = ap.parse_args()
     root = Path(a.root).resolve()
@@ -903,7 +1012,7 @@ def main():
         cmds = {"build": lambda: cmd_build(root, cfg), "embed": lambda: cmd_embed(root, cfg),
                 "status": lambda: cmd_status(root, cfg), "manifest": lambda: cmd_manifest(root, cfg, a),
                 "check": lambda: cmd_check(root, cfg, a), "search": lambda: cmd_search(root, cfg, a),
-                "eval": lambda: cmd_eval(root, cfg, a)}
+                "coverage": lambda: cmd_coverage(root, cfg, a), "eval": lambda: cmd_eval(root, cfg, a)}
         cmds[a.cmd]()
     except WikitilaError as e:
         print(f"FEHLER: {e}", file=sys.stderr)

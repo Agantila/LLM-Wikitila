@@ -356,6 +356,79 @@ class T(unittest.TestCase):
                     paths = [h["path"] for h in W.search(c, cfg, g["q"], 10)["results"]]
                     self.assertTrue(set(g["expect"]) & set(paths), g["q"])
 
+    # ---------- Qualität/Suchsicht (Plan 2026-11-25, P1–P5) ----------
+
+    def test_numeric_tokens_kept(self):
+        self.assertEqual(W.tokens("Preis 1.199 EUR"), ["preis", "199", "eur"])
+        self.assertEqual(W.tokens("Stand 10.794 Knoten"), ["stand", "10", "794", "knoten"])
+
+    def test_frontmatter_status_searchable(self):
+        (self.root / "06_Marketing/Preisbeschluss.md").write_text(
+            "---\ntitle: Preisbeschluss\nstatus: proposed\n---\n# Preisbeschluss\n\nDie Erhöhung ist noch nicht verbindlich.\n", encoding="utf-8")
+        c = self.build()
+        r = W.search(c, self.cfg, "Preisbeschluss proposed", 5)["results"]
+        self.assertEqual(r[0]["path"], "06_Marketing/Preisbeschluss.md")
+
+    def test_authority_value_chunks_preferred_and_metadata(self):
+        (self.root / "06_Marketing/Preise_Multi.md").write_text(
+            "# Preise\n\n## Einleitung\n\nViele Details zum Produkt und seinen Stufen.\n\n## Aktuell\n\nDer Preis beträgt 549 EUR heute.\n\n## Alt\n\nFrüher waren es 299 EUR.\n", encoding="utf-8")
+        (self.root / "authority_register.json").write_text(json.dumps({
+            "entries": [{"id": "preise", "scope": "Preise", "canonical": "06_Marketing/Preise_Multi.md",
+                         "authority": "canonical", "verified_at": "2026-11-14", "stale_after": None,
+                         "supersedes": [], "status": "accepted", "authority_confirmed": True,
+                         "value": ["549"]}]}), encoding="utf-8")
+        cfg = W.load_cfg(self.root)
+        c = self.build()
+        top = W.search(c, cfg, "Preise Produkt Details", 5)["results"][0]
+        self.assertEqual(top["path"], "06_Marketing/Preise_Multi.md")
+        joined = " ".join(p["heading"] + " " + p["body"] for p in top["passages"])
+        self.assertIn("549", joined)
+        self.assertEqual(top["authority"], "canonical")
+        self.assertEqual(top["verified_at"], "2026-11-14")
+
+    def test_authority_value_slash_separated(self):
+        (self.root / "06_Marketing/Preise_Kompakt.md").write_text(
+            "# Preise\n\n## Übersicht\n\nDrei Produktstufen mit unterschiedlichen Preisen für verschiedene Zielgruppen.\n\n"
+            "## Starter\n\nDas Starter-Paket kostet 549 EUR monatlich und enthält Basis-Features.\n\n"
+            "## Pro\n\nDas Pro-Paket kostet 899 EUR monatlich mit erweiterten Features.\n\n"
+            "## Premium\n\nDas Premium-Paket kostet 1.199 EUR monatlich mit allen Features.\n", encoding="utf-8")
+        (self.root / "authority_register.json").write_text(json.dumps({
+            "entries": [{"id": "preise", "scope": "Preise", "canonical": "06_Marketing/Preise_Kompakt.md",
+                         "authority": "canonical", "verified_at": "2026-11-14", "stale_after": None,
+                         "supersedes": [], "status": "proposed", "authority_confirmed": False,
+                         "value": ["549/899/1.199"]}]}), encoding="utf-8")
+        cfg = W.load_cfg(self.root)
+        c = self.build()
+        top = W.search(c, cfg, "Preise Produktstufen Zielgruppen", 5)["results"][0]
+        self.assertEqual(top["path"], "06_Marketing/Preise_Kompakt.md")
+        joined = " ".join(p["heading"] + " " + p["body"] for p in top["passages"])
+        self.assertIn("549", joined)
+
+    def test_coverage_grade_near_topic_negative(self):
+        (self.root / "06_Marketing/pinterest.md").write_text(
+            "# Pinterest\n\nPinterest ist eine weitere Plattform.\n", encoding="utf-8")
+        c = self.build()
+        res = W.search(c, self.cfg, "Welche Safe Zones gelten für Pinterest?", 3)
+        self.assertLess(res["term_coverage"], 1.0)
+        self.assertIn("pinterest", res["uncovered"])
+        full = W.search(c, self.cfg, "Safe Zones TikTok Prozent", 3)
+        self.assertEqual(full["term_coverage"], 1.0)
+
+    def test_trace_and_gate_reason(self):
+        c = self.build()
+        res = W.search(c, self.cfg, "Starter kostet EUR", 3)
+        self.assertEqual(res["answer_status"], "widersprüchlich")
+        self.assertIn("trace", res)
+        self.assertEqual(res["trace"]["query_tokens"], W.tokens("Starter kostet EUR"))
+        self.assertIn("abgelöste Quelle", res["trace"]["gate"])
+
+    def test_short_section_with_heading_is_indexed(self):
+        (self.root / "06_Marketing/Schrift.md").write_text(
+            "# Fonts\n\n## Hauptschrift\n\nBai Jamjuree.\n", encoding="utf-8")
+        c = self.build()
+        r = W.search(c, self.cfg, "Bai Jamjuree", 3)["results"]
+        self.assertEqual(r[0]["path"], "06_Marketing/Schrift.md")
+
 
 if __name__ == "__main__":
     unittest.main()
