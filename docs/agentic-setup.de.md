@@ -2,6 +2,54 @@
 
 Diese Datei ist die Arbeitsanleitung für **KI-Agenten** (Hermes, Claude, Cursor u. ä.), die LLM-Wikitila in einem Projekt einrichten, nutzen oder pflegen. (Englisch: [agentic-setup.en.md](agentic-setup.en.md). Kann bei Bedarf 1:1 als `AGENTS.md` im Repo aktiviert werden.)
 
+## 0. Setup-Prompt — einfach in ein beliebiges Agent-Harness einfügen
+
+Für die optimale Einrichtung reicht **ein** Prompt. Kopiere den Block unverändert in Claude Code, Codex, Cursor, Hermes oder ein anderes Agent-Harness. Der Agent klärt die offenen Fragen mit dir, bevor er etwas überschreibt — die Fragen sind zugleich die Anforderungs-Checkliste für ein optimales LLM-Wiki.
+
+```text
+Richte LLM-Wikitila in diesem Ordner optimal ein (lokale, belegte Suche über Markdown).
+Wahrheitsquelle: https://github.com/Agantila/LLM-Wikitila (docs/ + skills/llm-wikitila/).
+Antwortvertrag: belegt · widersprüchlich · belegt_gueltigkeit_unbestaetigt · nicht_belegt.
+
+Arbeite in dieser Reihenfolge und FRAGE bei jedem offenen Punkt nach, bevor du schreibst:
+
+1. ROOT & SCOPE
+   - Welcher Ordner ist der kanonische Vault? (Vorgabe: aktueller Ordner.)
+   - Welche Dateitypen? (Vorgabe .md/.txt; alles andere zählt als Ausschluss im Manifest.)
+   - Was muss raus? → .graphifyignore anlegen/pflegen (node_modules, Fremdcode, Kopien, *.js, Archive).
+
+2. WERKZEUG
+   - git clone https://github.com/Agantila/LLM-Wikitila.git  (oder ./install.sh <ordner>).
+   - wikitila.toml nur bei echten Abweichungen von config.example.toml anlegen.
+
+3. AUTHORITY (Herzstück)
+   - Welche Dateien sind maßgeblich (Preise, Entscheidungen, Kennzahlen, Definitionen)?
+   - Welche Quellen sind überholt, welche lösen was ab?
+   - Welche Fakten sind zeitabhängig (stale_after / Review-Termin)?
+   → authority_register.json befüllen. NUR der menschliche Owner setzt authority_confirmed: true.
+
+4. INDEX & PRÜFUNG
+   - wikitila.py --root <ordner> build
+   - wikitila.py --root <ordner> manifest   (Coverage: was ist ausgeschlossen und warum)
+   - wikitila.py --root <ordner> check      (Drift 0)
+   - .wikitila/ in .gitignore aufnehmen.
+
+5. ABNAHME
+   - Fragenkatalog (JSONL, ~50 Fälle: positiv/authority/coverage/negativ) mit dem Owner anlegen.
+   - python3 validate_catalog.py --root . --catalog <katalog>
+     Ziele: R@10 ≥ 0,95 · MRR ≥ 0,80 · Passagen-Präsenz hoch · Coverage-Note < 1,0 auf Negativ-Fällen.
+   - Verfehlte Fälle analysieren (Register, Scope, Überschriften) und nachziehen.
+
+6. GRAPH (optional, nie als Belegquelle)
+   - Nur auf ausdrückliche Freigabe; Dauer vorher nennen (≈0,3 Dokumente/s).
+   - wikitila_graph.py run --model maternion/ling-3.0-tiny:8b --workers 2, danach build.
+
+MELDE AM ENDE: Index-Stand (Dateien/Abschnitte), Drift, Abnahme-Messwerte, offene Punkte.
+Regeln: nie auf einem echten Vault evaluieren/testen; nie Negativ-Teststichwörter in indexierte Doku schreiben.
+```
+
+Tipp: `coverage "Frage"` prüft die Antwortabdeckung vorab ohne Ranking — nützlich, wenn ein Agent eine Frage als unbeantwortbar einstuft.
+
 ## 1. Installation durch einen Agenten
 
 ```bash

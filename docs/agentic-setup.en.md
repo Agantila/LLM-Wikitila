@@ -2,6 +2,54 @@
 
 This file is the working guide for **AI agents** (Hermes, Claude, Cursor, etc.) that set up, use, or maintain LLM-Wikitila in a project. (German version: [docs/agentic-setup.de.md](agentic-setup.de.md).)
 
+## 0. Setup prompt — paste into any agent harness
+
+For the optimal setup, **one** prompt is enough. Copy the block unchanged into Claude Code, Codex, Cursor, Hermes, or any other agent harness. The agent clarifies the open questions with you before it writes anything — the questions double as the requirements checklist for an optimal LLM wiki.
+
+```text
+Set up LLM-Wikitila optimally in this folder (local, evidence-backed search over Markdown).
+Source of truth: https://github.com/Agantila/LLM-Wikitila (docs/ + skills/llm-wikitila/).
+Answer contract: belegt · widersprüchlich · belegt_gueltigkeit_unbestaetigt · nicht_belegt.
+
+Work in this order and ASK about every open point before writing anything:
+
+1. ROOT & SCOPE
+   - Which folder is the canonical vault? (Default: the current folder.)
+   - Which file types? (Default .md/.txt; everything else counts as an exclusion in the manifest.)
+   - What must be excluded? → create/maintain .graphifyignore (node_modules, third-party code, copies, *.js, archives).
+
+2. TOOLING
+   - git clone https://github.com/Agantila/LLM-Wikitila.git  (or ./install.sh <folder>).
+   - Create wikitila.toml only for real deviations from config.example.toml.
+
+3. AUTHORITY (the core)
+   - Which files are authoritative (prices, decisions, metrics, definitions)?
+   - Which sources are superseded, and which replace what?
+   - Which facts are time-sensitive (stale_after / review date)?
+   → fill authority_register.json. ONLY the human owner sets authority_confirmed: true.
+
+4. INDEX & CHECKS
+   - wikitila.py --root <folder> build
+   - wikitila.py --root <folder> manifest   (coverage: what is excluded and why)
+   - wikitila.py --root <folder> check      (drift 0)
+   - add .wikitila/ to .gitignore.
+
+5. ACCEPTANCE
+   - Create a question catalog (JSONL, ~50 cases: positive/authority/coverage/negative) with the owner.
+   - python3 validate_catalog.py --root . --catalog <catalog>
+     Targets: R@10 ≥ 0.95 · MRR ≥ 0.80 · passage presence high · coverage grade < 1.0 on negative cases.
+   - Analyze missed cases (register, scope, headings) and fix them.
+
+6. GRAPH (optional, never as the evidence source)
+   - Only on explicit approval; state the duration first (≈0.3 documents/s).
+   - wikitila_graph.py run --model maternion/ling-3.0-tiny:8b --workers 2, then build.
+
+REPORT AT THE END: index state (files/sections), drift, acceptance metrics, open points.
+Rules: never evaluate/test on a real vault; never write negative-test keywords into indexed docs.
+```
+
+Tip: `coverage "question"` checks answer coverage up-front without ranking — useful when an agent classifies a question as unanswerable.
+
 ## 1. Installation by an agent
 
 ```bash
