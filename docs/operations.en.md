@@ -17,7 +17,7 @@ No service, no autostart needed. For automation, a cron entry or git hook that r
 2. Open only the named files — the original passage is the quote.
 3. Connections: `graphify path "A" "B"` and `graphify explain "X"` on `graphify-out/graph.json` (only if the graph was built).
 4. Read the flags: `überholt durch …` → read the newer file; `kanonisch` → authoritative source; `veraltet`/`Gültigkeit nicht bestätigt` → factual validity open.
-5. Read `Antwortstatus`: `nicht_belegt` → no reliable answer; `widersprüchlich` → multiple values with resolution; `belegt_gueltigkeit_unbestaetigt` → evidence present, validity open. The notes `Begriffe ohne Treffer …` and `Begriffe nicht im Top-1-Ergebnis …` show where the agent must abstain itself.
+5. Read `Antwortstatus`: `nicht_belegt` → no reliable answer; `widersprüchlich` → multiple values with resolution; `belegt_gueltigkeit_unbestaetigt` → evidence present, validity open. The notes `Begriffe ohne Treffer …`, `Begriffe nicht im Top-1-Ergebnis …`, and `Begriffe ohne ko-lokalen Beleg …` (`term_coverage`/`uncovered`) show where the agent must abstain itself. Before the actual search, `wikitila.py coverage "question"` checks coverage cheaply.
 
 ## Conflict and freshness resolution
 

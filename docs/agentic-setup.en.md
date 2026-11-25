@@ -26,7 +26,7 @@ python3 wikitila.py --root <folder> check                           # index/sour
 python3 wikitila.py --root <folder> status                          # index state
 ```
 
-Answer fields: `results` (file, `heading`, `passages` = original passages, `score`, `why`), `answer_status`, `unmatched_terms`, `top1_missing_terms`, `bm25_top`. Flags per hit: `canonical`, `stale`, `unverified`, `superseded_by`.
+Answer fields: `results` (file, `heading`, `passages` = original passages, `score`, `why`), `answer_status`, `unmatched_terms`, `top1_missing_terms`, `term_coverage`/`uncovered` (coverage grade), `trace` (register rules + answer-gate reason), `bm25_top`. Flags per hit: `canonical`, `stale`, `unverified`, `superseded_by`, `authority`, `verified_at`. Pre-flight without ranking: `wikitila.py --root <folder> coverage "question"`.
 
 ## 3. Answer contract (binding for agents)
 

@@ -26,7 +26,7 @@ python3 wikitila.py --root <ordner> check                        # Index-/Quells
 python3 wikitila.py --root <ordner> status                       # Index-Stand
 ```
 
-Antwortfelder: `results` (Datei, `heading`, `passages` = Originalpassagen, `score`, `why`), `answer_status`, `unmatched_terms`, `top1_missing_terms`, `bm25_top`. Flags je Treffer: `canonical`, `stale`, `unverified`, `superseded_by`.
+Antwortfelder: `results` (Datei, `heading`, `passages` = Originalpassagen, `score`, `why`), `answer_status`, `unmatched_terms`, `top1_missing_terms`, `term_coverage`/`uncovered` (Coverage-Note), `trace` (Register-Regeln + Antwort-Tor-Begründung), `bm25_top`. Flags je Treffer: `canonical`, `stale`, `unverified`, `superseded_by`, `authority`, `verified_at`. Vorab ohne Ranking: `wikitila.py --root <ordner> coverage "Frage"`.
 
 ## 3. Antwortvertrag (verbindlich für Agenten)
 

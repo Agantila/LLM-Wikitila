@@ -34,6 +34,15 @@ Three levels:
 2. **Passage presence** — does the top-1 result (full passages) carry the answer-bearing evidence?
 3. **Coverage & negatives** — are non-Markdown files listed as exclusions? Does the search abstain when knowledge is missing (abstention signal)?
 
+Additionally, `validate_catalog.py` measures the **coverage grade** (`term_coverage < 1.0`) for `kind=negativ`. The same grade is returned by search, and a cheap pre-flight checks it without ranking:
+
+```bash
+python3 wikitila.py --root . coverage "What safe zones apply to Pinterest ads?"
+# -> Term coverage: 0.60 · Not co-located: pinterest
+```
+
+The grade is deterministic (co-location of query terms in the same chunk) and does not replace semantics — it makes the agent's abstention verifiable.
+
 ## Reference measurements (AGANTILA vault, 50-question catalog)
 
 | Level | Value |

@@ -34,6 +34,15 @@ Drei Ebenen:
 2. **Passagen-Präsenz** — trägt das Top-1-Ergebnis (volle Passagen) den antworttragenden Beleg?
 3. **Coverage & Negativ** — sind Nicht-Markdown-Dateien als Ausschluss geführt? Wird bei fehlendem Wissen abgewiesen (Abstention-Signal)?
 
+Zusätzlich misst `validate_catalog.py` für `kind=negativ` die **Coverage-Note** (`term_coverage < 1,0`). Dieselbe Note liefert die Suche direkt mit, und ein billiger Pre-Flight prüft sie ohne Ranking:
+
+```bash
+python3 wikitila.py --root . coverage "Welche Safe Zones gelten für Pinterest?"
+# -> Term-Abdeckung: 0.60 · Ohne ko-lokalen Beleg: pinterest
+```
+
+Die Note ist deterministisch (Ko-Lokation der Query-Begriffe im selben Chunk) und ersetzt keine Semantik — sie macht die Abstention des Agenten belegbar.
+
 ## Referenz-Messwerte (AGANTILA-Vault, 50-Fälle-Katalog)
 
 | Ebene | Wert |

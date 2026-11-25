@@ -17,7 +17,7 @@ Kein Dienst, kein Autostart nötig. Für Automation genügt ein Cron-Eintrag ode
 2. Nur die genannten Dateien öffnen — die Originalpassage ist das Zitat.
 3. Zusammenhänge: `graphify path "A" "B"` und `graphify explain "X"` auf `graphify-out/graph.json` (nur wenn der Graph gebaut wurde).
 4. Flags lesen: `überholt durch …` → neuere Datei lesen; `kanonisch` → maßgebliche Quelle; `veraltet`/`Gültigkeit nicht bestätigt` → fachliche Gültigkeit offen.
-5. `Antwortstatus` lesen: `nicht_belegt` → keine belastbare Antwort; `widersprüchlich` → mehrere Werte mit Auflösung; `belegt_gueltigkeit_unbestaetigt` → Beleg da, Gültigkeit offen. Die Hinweise `Begriffe ohne Treffer …` und `Begriffe nicht im Top-1-Ergebnis …` zeigen, wo der Agent selbst abstimmen muss.
+5. `Antwortstatus` lesen: `nicht_belegt` → keine belastbare Antwort; `widersprüchlich` → mehrere Werte mit Auflösung; `belegt_gueltigkeit_unbestaetigt` → Beleg da, Gültigkeit offen. Die Hinweise `Begriffe ohne Treffer …`, `Begriffe nicht im Top-1-Ergebnis …` und `Begriffe ohne ko-lokalen Beleg …` (`term_coverage`/`uncovered`) zeigen, wo der Agent selbst abstimmen muss. Vor der eigentlichen Suche kann `wikitila.py coverage "Frage"` die Abdeckung billig prüfen.
 
 ## Konflikt- und Freshness-Auflösung
 
