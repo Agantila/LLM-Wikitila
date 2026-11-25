@@ -50,6 +50,48 @@ Rules: never evaluate/test on a real vault; never write negative-test keywords i
 
 Tip: `coverage "question"` checks answer coverage up-front without ranking — useful when an agent classifies a question as unanswerable.
 
+## 0b. Upgrade prompt — migrate an existing LLM wiki/second brain onto the Wikitila stack
+
+For a **migration** (legacy search layer `sbs_search.py`/`second_brain_stack`, `.sbs/`, `SBS_*`, or an existing second brain without evidence-backed search), copy this block into any agent harness:
+
+```text
+Migrate this existing LLM wiki/second brain onto the LLM-Wikitila stack and verify the integration.
+Source of truth: https://github.com/Agantila/LLM-Wikitila (docs/ + skills/llm-wikitila/).
+
+STEP 0 — INVENTORY (inspect first, delete nothing):
+- Legacy search layer present? (sbs_search.py, second_brain_stack, .sbs/, SBS_ROOT/SBS_NUM_*)
+- Where is the existing index? (.sbs/index.db or .wikitila/index.db)
+- Is there a graphify-out/graph.json? (do not overwrite, back it up first)
+- Is there an authority_register.json? Which entries, which authority_confirmed?
+- Which docs reference the legacy search layer (commands, paths, env vars)?
+
+STEP 1 — MIGRATE:
+- git clone https://github.com/Agantila/LLM-Wikitila.git  (or ./install.sh <folder>).
+- Index location .wikitila/index.db; add .wikitila/ to .gitignore. Archive/delete old .sbs/ only after asking.
+- Create wikitila.toml only with real deviations; replace SBS_* with WIKITILA_*.
+- graph.json stays under graphify-out/ and is only read at build — back it up before every build.
+
+STEP 2 — INDEX & VERIFY:
+- wikitila.py --root <folder> build   (full rebuild)
+- wikitila.py --root <folder> manifest
+- wikitila.py --root <folder> check    (drift 0)
+- Spot checks: 5–10 real questions against known answers; coverage "question" for unanswerable ones.
+
+STEP 3 — FIX REFERENCES:
+- Rewrite doc references to the legacy search layer to wikitila.py/--root/WIKITILA_*.
+- Check MASTER.md/overview, setup and operations docs, skill files; replace dead paths.
+- Change AGENTS.md/CLAUDE.md only with approval.
+
+STEP 4 — ACCEPTANCE:
+- Reuse or create a question catalog (JSONL, ~50 cases).
+- python3 validate_catalog.py --root . --catalog <catalog>
+  Targets: R@10 ≥ 0.95 · MRR ≥ 0.80 · passage presence high · coverage grade < 1.0 on negative cases.
+- Analyze missed cases (register, scope, dead paths) and fix them.
+
+REPORT AT THE END: what was migrated, index state, drift, metrics, open points.
+Rules: never evaluate/test on a real vault; delete legacy artifacts only after approval.
+```
+
 ## 1. Installation by an agent
 
 ```bash

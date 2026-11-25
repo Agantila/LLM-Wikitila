@@ -50,6 +50,48 @@ Regeln: nie auf einem echten Vault evaluieren/testen; nie Negativ-Teststichwört
 
 Tipp: `coverage "Frage"` prüft die Antwortabdeckung vorab ohne Ranking — nützlich, wenn ein Agent eine Frage als unbeantwortbar einstuft.
 
+## 0b. Upgrade-Prompt — vorhandenes LLM-Wiki/Second Brain auf den Wikitila-Stack heben
+
+Für eine **Migration** (alte Suchschicht `sbs_search.py`/`second_brain_stack`, `.sbs/`, `SBS_*`, oder ein bestehendes Second Brain ohne Beleg-Suche) kopiere diesen Block in ein beliebiges Agent-Harness:
+
+```text
+Hebe dieses vorhandene LLM-Wiki/Second Brain auf den LLM-Wikitila-Stack und prüfe die Integration.
+Wahrheitsquelle: https://github.com/Agantila/LLM-Wikitila (docs/ + skills/llm-wikitila/).
+
+SCHRITT 0 — BESTAND AUFNEHMEN (erst inventarisieren, nichts löschen):
+- Alte Suchschicht vorhanden? (sbs_search.py, second_brain_stack, .sbs/, SBS_ROOT/SBS_NUM_*)
+- Wo liegt der bestehende Index? (.sbs/index.db oder .wikitila/index.db)
+- Gibt es graphify-out/graph.json? (nicht überschreiben, vorher sichern)
+- Gibt es authority_register.json? Welche Einträge, welche authority_confirmed?
+- Welche Doku verweist auf die alte Suchschicht (Befehle, Pfade, Env-Variablen)?
+
+SCHRITT 1 — MIGRIEREN:
+- git clone https://github.com/Agantila/LLM-Wikitila.git  (oder ./install.sh <ordner>).
+- Index-Ort .wikitila/index.db; .wikitila/ in .gitignore. Altes .sbs/ erst nach Rückfrage archivieren/löschen.
+- wikitila.toml nur mit echten Abweichungen anlegen; SBS_* → WIKITILA_* ersetzen.
+- graph.json bleibt unter graphify-out/ und wird beim Build nur eingelesen — vor jedem Build sichern.
+
+SCHRITT 2 — INDEX & VERIFIKATION:
+- wikitila.py --root <ordner> build   (vollständiger Neuaufbau)
+- wikitila.py --root <ordner> manifest
+- wikitila.py --root <ordner> check    (Drift 0)
+- Suchproben: 5–10 echte Fragen gegen bekannte Antworten; coverage "Frage" für Unbeantwortbares.
+
+SCHRITT 3 — REFERENZEN NACHZIEHEN:
+- Doku-Verweise auf die alte Suchschicht auf wikitila.py/--root/WIKITILA_* umstellen.
+- MASTER.md/Übersicht, Setup- und Betriebsdoku, Skill-Dateien prüfen; tote Pfade ersetzen.
+- AGENTS.md/CLAUDE.md nur mit Freigabe ändern.
+
+SCHRITT 4 — ABNAHME:
+- Fragenkatalog (JSONL, ~50 Fälle) übernehmen oder anlegen.
+- python3 validate_catalog.py --root . --catalog <katalog>
+  Ziele: R@10 ≥ 0,95 · MRR ≥ 0,80 · Passagen-Präsenz hoch · Coverage-Note < 1,0 auf Negativ-Fällen.
+- Verfehlte Fälle analysieren (Register, Scope, tote Pfade) und nachziehen.
+
+MELDE AM ENDE: was migriert wurde, Index-Stand, Drift, Messwerte, offene Punkte.
+Regeln: nie auf einem echten Vault evaluieren/testen; alte Artefakte erst nach Freigabe löschen.
+```
+
 ## 1. Installation durch einen Agenten
 
 ```bash
