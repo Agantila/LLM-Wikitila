@@ -10,4 +10,5 @@ Eine Zeile pro Eintrag. Format und Regeln: `AGENTS.md` Abschnitt 5.
 - [Maskierung an der Ausgabe, nicht im Index](maskierung-an-der-ausgabe.md) — jedes neue Ausgabefeld durch `mk()` schicken
 - [Synthetische Lastkorpora](synthetische-lastkorpora.md) — so wurden die Skalierungswerte gemessen
 - [Workspace-Einsatz über Release-Worktree](workspace-einsatz-release-worktree.md) — produktive Vaults laufen auf einem Tag, Entwicklung nur hier; Repo nie in indexierten Ordner legen
+- [Kurze Abschnitte werden verworfen](kurze-abschnitte-werden-verworfen.md) — `chunk_text` überspringt Abschnitte < `min_chunk_chars`, auch mit Überschrift (Passagen-Präsenz)
 - [GitHub-Konto kommandobezogen wechseln](gh-konto-kommandobezogen-wechseln.md) — `GH_TOKEN` je Kommando statt `gh auth switch`, sonst pusht der Credential-Helper unter dem falschen Konto

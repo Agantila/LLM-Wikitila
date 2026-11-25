@@ -4,12 +4,28 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen 
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-11-25
+
+Suchsicht und Qualität (MRR, Passagen-Präsenz, Abstention), Plan: [pm/plans/2026-11-25-qualitaet-mrr-passage-abstention.md](pm/plans/2026-11-25-qualitaet-mrr-passage-abstention.md), ADR-005.
+
+### Hinzugefügt
+- **Suchsicht:** `search --json` liefert `term_coverage`/`uncovered` (deterministische Coverage-Note, Analog zu NVIDIA Auto Ontologys `check_answerable`) und einen Query-`trace` (aufgelöste Register-Regeln, Antwort-Tor-Begründung). Treffer tragen zusätzlich `authority`/`verified_at` aus dem Authority-Register.
+- **Neuer Befehl `coverage`:** Pre-Flight ohne Ranking, der meldet, wie gut der Index eine Frage abdeckt (Ko-Lokation der Query-Begriffe im selben Chunk).
+- `validate_catalog.py`: neue Zeile „Coverage-Note < 1,0“ für `kind=negativ`.
+
+### Geändert
+- Datei-Ranking aggregiert bis zu drei Chunks je Datei statt nur des besten Chunk-Rangs (MRR, B-010).
+- Frontmatter-`status`/`superseded_by` werden in den durchsuchbaren Titel aufgenommen („verbindlich beschlossen?“ → `proposed` auffindbar).
+- Chunks, die einen Authority-Register-Wert enthalten, werden bei allen Register-Einträgen bevorzugt; kompakte Werte („549/899/1.199“) werden in Atome zerlegt (Passagen-Präsenz).
+- Tokenisierung behält mehrstellige Zahlen („1.199“, „10.794“); einzelne Ziffern entfallen. Häufige Verben (`gelten`, `gibt`, …) sind Stoppwörter.
+- Kurze Abschnitte mit Überschrift und Inhalt werden indexiert statt verworfen (B-018; „## Schrift · Bai Jamjuree“ auffindbar).
+
 ### Behoben
 - `install.sh` und `wikitila` sind im Repository als ausführbar markiert. Vorher scheiterte `./install.sh` nach einem frischen Klon mit „Permission denied“.
 
 ### Doku und Projektmanagement
 - Repository veröffentlicht: `Agantila/LLM-Wikitila` ist öffentlich, `main` und Tag `v0.2.0` sind gepusht, CI auf Python 3.11 bis 3.13 grün.
-- Lokale Veröffentlichungsbereitschaft erneut geprüft. Status und Backlog weisen das vorhandene `gh`-Konto sowie die ausstehende ausdrückliche Freigabe für das öffentliche Anlegen aus.
+- ADR-005: Coverage-Note ist ein Signal, kein Antwort-Tor-Kriterium.
 
 ## [0.2.0] — 2026-11-15
 
