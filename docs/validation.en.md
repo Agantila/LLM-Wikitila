@@ -50,7 +50,7 @@ The grade is deterministic (co-location of query terms in the same chunk) and do
 | File recall | R@10 **1.00**, MRR 0.785, p95 ~35 ms |
 | Passage presence (top-1, full passages) | 45% |
 | Abstention signal on negative cases | 8/8 |
-| Unit tests | 18/18 (at measurement time; currently 32/32) |
+| Unit tests | 18/18 (at measurement time; currently 39/39) |
 
 **Target check:** R@10 meets the target ≥ 0.95. MRR 0.785 is **below** the target 0.80 — open backlog item (`pm/BACKLOG.md`, B-010).
 

@@ -17,7 +17,7 @@ The register answers **"which file is authoritative for this topic"** and **"is 
 | `superseded_by` | successor (path) | if any |
 | `status` | frontmatter `status` of the canonical file | informational |
 | `authority_confirmed` | `true` = owner confirmed; `false` = proposal | yes |
-| `value` | exact substrings of the canonical value (to find the answer-bearing passage) | recommended on supersession |
+| `value` | substrings of the canonical value (to find the answer-bearing passage); compact values like "549/899/1.199" are split into atoms | recommended on supersession |
 | `note` | evidence, value, rationale | recommended |
 
 ## Example

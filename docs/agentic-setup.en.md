@@ -47,7 +47,7 @@ Answer fields: `results` (file, `heading`, `passages` = original passages, `scor
 ## 5. Validation
 
 - Create a question catalog (JSONL, schema: `docs/validation.en.md`) and measure with `python3 validate_catalog.py --root . --catalog <catalog>` (file recall, passage presence, coverage/negatives).
-- Reference values: R@10 1.00 · MRR 0.785 · passages 45% · abstention signal 8/8 · 18/18 tests at measurement time (currently 32/32). MRR is below the 0.80 target (backlog B-010).
+- Reference values: R@10 1.00 · MRR 0.785 · passages 45% · abstention signal 8/8 · 18/18 tests at measurement time (currently 39/39). MRR is below the 0.80 target (backlog B-010).
 - File recall is **not** proof of answer quality.
 
 ## 6. Knowledge graph (optional)

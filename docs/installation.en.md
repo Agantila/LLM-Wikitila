@@ -49,7 +49,8 @@ Note: The first graph run takes time (~0.3 documents per second, e.g. 1,250 docu
 python3 wikitila.py --root . status      # Index state
 python3 wikitila.py --root . manifest    # Coverage report (scope, exclusions)
 python3 wikitila.py --root . check       # Index/source consistency (no drift?)
-python3 -m unittest test_wikitila        # self-tests (32)
+python3 wikitila.py --root . coverage "question"  # answer coverage up-front (coverage grade)
+python3 -m unittest test_wikitila        # self-tests (39)
 ```
 
 ## Troubleshooting

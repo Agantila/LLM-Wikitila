@@ -17,7 +17,7 @@ Das Register beantwortet **„welche Datei ist für dieses Thema maßgeblich“*
 | `superseded_by` | Nachfolger (Pfad) | falls vorhanden |
 | `status` | Frontmatter-`status` der kanonischen Datei | informativ |
 | `authority_confirmed` | `true` = Owner bestätigt; `false` = Vorschlag | ja |
-| `value` | exakte Teilstrings des kanonischen Werts (für die antworttragende Passage) | empfohlen bei Ablösung |
+| `value` | Teilstrings des kanonischen Werts (für die antworttragende Passage); kompakte Werte wie „549/899/1.199“ werden in Einzelwerte zerlegt | empfohlen bei Ablösung |
 | `note` | Beleg, Wert, Begründung | empfohlen |
 
 ## Beispiel

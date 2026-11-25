@@ -6,7 +6,7 @@ license: MIT
 
 # LLM-Wikitila: fast, evidence-backed search and local graph
 
-Tools: `wikitila.py` (search/build/status/manifest/check/eval/embed), `wikitila_graph.py` (local Graphify extraction), `validate_catalog.py` (validation). Docs: `docs/` (German + English). Agent rules: `AGENTS.md` / `docs/agentic-setup.en.md`.
+Tools: `wikitila.py` (search/build/coverage/status/manifest/check/eval/embed), `wikitila_graph.py` (local Graphify extraction), `validate_catalog.py` (validation). Docs: `docs/` (German + English). Agent rules: `AGENTS.md` / `docs/agentic-setup.en.md`.
 
 ## When to load
 

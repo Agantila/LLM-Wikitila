@@ -80,7 +80,7 @@ type: decision | learning | pitfall | reference
 
 | Datei | Zweck |
 |---|---|
-| `wikitila.py` | build · search · status · manifest · check · eval · embed |
+| `wikitila.py` | build · search · coverage · status · manifest · check · eval · embed |
 | `wikitila_graph.py` | optionale lokale Graphify-Extraktion (Ollama) |
 | `validate_catalog.py` | Messung auf drei Ebenen (Recall, Passage, Negativ/Coverage) |
 | `test_wikitila.py` | Unit-Tests auf synthetischem Korpus |
