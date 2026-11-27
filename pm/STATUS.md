@@ -1,6 +1,6 @@
 # Status
 
-**Stand:** 2026-11-27 · **Version:** 0.3.0 getaggt; Unreleased (Kandidat 0.4.0) in PR #1 (`feat/production-hardening`), wartet auf Merge · **Repo:** <https://github.com/Agantila/LLM-Wikitila>
+**Stand:** 2026-11-27 · **Version:** 0.4.0 (Tag `v0.4.0`) · **Repo:** <https://github.com/Agantila/LLM-Wikitila>
 
 **Einsatz:** Erster Produktiveinsatz im Referenz-Vault des Owners über einen Release-Worktree (siehe [Einsatz](#einsatz))
 

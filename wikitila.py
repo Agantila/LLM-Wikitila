@@ -30,7 +30,7 @@ try:
 except ModuleNotFoundError:  # Python < 3.11
     tomllib = None
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 MAX_FILE_BYTES = 600_000   # Dateien darüber werden übersprungen (Bytes, in build/check/manifest gleich)
 # Indexformat (ADR-006): erhöhen, sobald sich ändert, was build aus einer unveränderten Datei
 # erzeugt (Parsing, Chunking, Felder). Ein abweichender Wert erzwingt beim nächsten build einen Vollneubau.

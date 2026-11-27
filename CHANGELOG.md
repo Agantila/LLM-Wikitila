@@ -4,6 +4,8 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen 
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-11-27
+
 Schreibseite (B-019, B-020), Plan: [pm/plans/2026-11-27-lint-schreibvertrag.md](pm/plans/2026-11-27-lint-schreibvertrag.md), Review: [review/report-2026-11-27-schreibseite.md](review/report-2026-11-27-schreibseite.md).
 
 ### Hinzugefügt
