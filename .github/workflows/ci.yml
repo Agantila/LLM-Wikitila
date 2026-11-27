@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.11", "3.12", "3.13"]
+        python: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -29,11 +29,13 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Unit-Tests
         run: python -W error::ResourceWarning -m unittest -v test_wikitila
-      - name: Demo-Katalog validieren
+      - name: Demo-Katalog validieren (Gate)
         run: |
           python wikitila.py --root examples/demo-corpus build
-          python validate_catalog.py --root examples/demo-corpus --catalog golden_catalog.example.jsonl | tee validate.txt
+          python validate_catalog.py --root examples/demo-corpus --catalog golden_catalog.example.jsonl --gate | tee validate.txt
           grep -q "R@10 1.00" validate.txt
+      - name: Schreibseite des Demo-Korpus (lint)
+        run: python wikitila.py --root examples/demo-corpus lint --all
       - name: Installer-Rauchtest
         run: |
           mkdir -p "$RUNNER_TEMP/ziel" && cd "$RUNNER_TEMP/ziel" && git init -q
@@ -41,3 +43,6 @@ jobs:
           bash "$GITHUB_WORKSPACE/install.sh" .
           test -f .wikitila/index.db
           grep -qxF '.wikitila/' .gitignore
+          python -c 'import json; assert json.load(open("authority_register.json"))["entries"] == []'
+          bash "$GITHUB_WORKSPACE/install.sh" .   # idempotent: zweiter Lauf ohne Fehler
+          test "$(grep -cxF '.wikitila/' .gitignore)" = 1

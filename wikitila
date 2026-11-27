@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
 # LLM-Wikitila CLI — bequemer Aufruf des Hauptwerkzeugs
-exec python3 "$(dirname "$0")/wikitila.py" "$@"
+# PYTHON=/pfad/zu/python3.11+ überschreibt den Interpreter (z. B. wenn `python3` zu alt ist oder kein sqlite3 hat).
+exec "${PYTHON:-python3}" "$(dirname "$0")/wikitila.py" "$@"

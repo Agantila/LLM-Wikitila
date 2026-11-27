@@ -8,16 +8,22 @@ Eine SQLite-Datei: FTS5 (BM25), Link-Graph, Entitäten aus Graphify, optionale V
   wikitila.py search  "Frage" [-k 5] [--json]
   wikitila.py coverage "Frage" [--json]      Coverage-Note (Antwortabdeckung, ohne Ranking)
   wikitila.py eval    golden.jsonl [--variants]   Messung gegen ein Golden Set
+  wikitila.py lint    [datei | --all] [--json]   Schreibseite prüfen (Frontmatter-Konvention)
   wikitila.py embed                          optional: Vektoren mit einem Ollama-Modell
-  wikitila.py status
+  wikitila.py status | manifest | check       Indexzustand, Source-Manifest, Index-/Quellstand-Abgleich
 
 Konfiguration: <root>/wikitila.toml (siehe config.example.toml).
 """
 from __future__ import annotations
 
-import argparse, contextlib, fnmatch, hashlib, json, math, os, re, sqlite3, sys, time, urllib.request
+import argparse, contextlib, fnmatch, hashlib, json, math, os, re, sys, time, urllib.error, urllib.request
 from collections import defaultdict
 from pathlib import Path
+
+try:
+    import sqlite3
+except ImportError:  # Python ohne _sqlite3 (z. B. selbst gebautes pyenv) — main meldet das verständlich
+    sqlite3 = None
 
 try:
     import tomllib
@@ -26,6 +32,11 @@ except ModuleNotFoundError:  # Python < 3.11
 
 __version__ = "0.3.0"
 MAX_FILE_BYTES = 600_000   # Dateien darüber werden übersprungen (Bytes, in build/check/manifest gleich)
+# Indexformat (ADR-006): erhöhen, sobald sich ändert, was build aus einer unveränderten Datei
+# erzeugt (Parsing, Chunking, Felder). Ein abweichender Wert erzwingt beim nächsten build einen Vollneubau.
+INDEX_FORMAT = "3"
+FM_RE = re.compile(r"---[ \t]*\n(?:(.*?)\n)??---[ \t]*(?:\n|\Z)", re.S)   # Frontmatter-Block (auch leer, auch am Dateiende)
+FM_KEY_RE = re.compile(r"^([A-Za-z0-9_][A-Za-z0-9_\-]*):\s*(.*)$")
 
 
 class WikitilaError(Exception):
@@ -44,6 +55,11 @@ DEFAULTS = {
                  "token_env": "LAYA_TOKEN"},
     "authority": {"enabled": True, "register": ""},
     "privacy": {"mask_secrets": True},
+    "lint": {"require": ["title", "description"],
+             "status_values": ["draft", "stable", "deprecated", "superseded"],   # superseded wertet der Index ab
+             "exclude": ["index.md", "log.md", "README.md", "CHANGELOG.md",
+                         "CLAUDE.md", "AGENTS.md", "MASTER.md", "copy_*", "*template*"],
+             "since": ""},
 }
 
 STOP = set("""der die das den dem des ein eine einen einem einer und oder ist sind wird werden wie was wer wo welche welcher
@@ -123,8 +139,47 @@ def load_register(root: Path, cfg: dict) -> dict:
     return out
 
 
+def _typ_ok(default, v) -> bool:
+    """Wert passt zum Typ des Defaults (bool ist kein int, ganze Zahl bleibt ganz, Listen enthalten Text)."""
+    if isinstance(default, bool):
+        return isinstance(v, bool)
+    if isinstance(default, int):
+        return isinstance(v, int) and not isinstance(v, bool) and v >= 0
+    if isinstance(default, float):
+        return isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0
+    if isinstance(default, list):
+        return isinstance(v, list) and all(isinstance(x, str) for x in v)
+    if isinstance(default, str):
+        return isinstance(v, str)
+    return True
+
+
+def check_cfg(over: dict, src: Path) -> None:
+    """Prüft wikitila.toml gegen DEFAULTS: falsche Typen sind Bedienfehler, Unbekanntes nur eine Warnung."""
+    typ = {bool: "true/false", int: "ganze Zahl ≥ 0", float: "Zahl ≥ 0", list: "Liste von Texten", str: "Text"}
+    for sec, val in over.items():
+        if sec not in DEFAULTS:
+            print(f"Warnung: {src}: unbekannte Sektion [{sec}] wird ignoriert", file=sys.stderr)
+            continue
+        if not isinstance(val, dict):
+            raise WikitilaError(f"Konfiguration fehlerhaft: {src}: [{sec}] muss eine Sektion sein, nicht {type(val).__name__}")
+        for key, v in val.items():
+            if key not in DEFAULTS[sec]:
+                print(f"Warnung: {src}: unbekannter Schlüssel {sec}.{key} wird ignoriert", file=sys.stderr)
+                continue
+            d = DEFAULTS[sec][key]
+            if not _typ_ok(d, v):
+                raise WikitilaError(f"Konfiguration fehlerhaft: {src}: {sec}.{key} = {v!r} — erwartet "
+                                    f"{typ.get(type(d), type(d).__name__)}")
+    if over.get("index", {}).get("max_chunk_chars", 1) < 1:
+        raise WikitilaError(f"Konfiguration fehlerhaft: {src}: index.max_chunk_chars muss ≥ 1 sein")
+
+
 def load_cfg(root: Path) -> dict:
-    p = Path(os.environ.get("WIKITILA_CONFIG", root / "wikitila.toml"))
+    env = os.environ.get("WIKITILA_CONFIG")
+    p = Path(env) if env else root / "wikitila.toml"
+    if env and not p.is_file():
+        raise WikitilaError(f"WIKITILA_CONFIG zeigt auf keine Datei: {p}")
     over = {}
     if p.exists():
         if tomllib is None:
@@ -132,8 +187,9 @@ def load_cfg(root: Path) -> dict:
         else:
             try:
                 over = tomllib.loads(p.read_text(encoding="utf-8"))
-            except (OSError, tomllib.TOMLDecodeError) as e:
+            except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
                 raise WikitilaError(f"Konfiguration fehlerhaft: {p}: {e}")
+            check_cfg(over, p)
     cfg = merge(DEFAULTS, over)
     cfg["_authority"] = load_register(root, cfg)
     return cfg
@@ -215,16 +271,22 @@ def read_source(root: Path, rel: str) -> str | None:
 
 
 # ---------- Dokumente ----------
+def frontmatter(text: str):
+    """(Match oder None, Text ohne BOM). Gemeinsame Sicht von build und lint auf den Frontmatter-Block."""
+    if text.startswith("\ufeff"):
+        text = text[1:]
+    return (FM_RE.match(text) if text.startswith("---") else None), text
+
+
 def parse_doc(text: str) -> tuple[dict, str]:
     fm = {}
-    if text.startswith("---"):
-        m = re.match(r"---\n(.*?)\n---\n", text, re.S)
-        if m:
-            for line in m.group(1).splitlines():
-                mm = re.match(r"^([A-Za-z_]+):\s*(.*)$", line)
-                if mm:
-                    fm[mm.group(1).lower()] = mm.group(2).strip().strip("\"'")
-            text = text[m.end():]
+    m, text = frontmatter(text)
+    if m:
+        for line in (m.group(1) or "").splitlines():
+            mm = FM_KEY_RE.match(line)
+            if mm:
+                fm[mm.group(1).lower()] = mm.group(2).strip().strip("\"'")
+        text = text[m.end():]
     return fm, text
 
 
@@ -260,7 +322,16 @@ def connect(root: Path, cfg: dict, create: bool = True) -> sqlite3.Connection:
     if not create and not db.exists():
         raise WikitilaError(f"Kein Index unter {db} — zuerst `wikitila.py --root {root} build` ausführen.")
     db.parent.mkdir(parents=True, exist_ok=True)
-    c = sqlite3.connect(db)
+    c = sqlite3.connect(db, timeout=30)   # paralleler build/Hook: warten statt sofort „database is locked“
+    try:
+        _schema(c)
+    except BaseException:
+        c.close()
+        raise
+    return c
+
+
+def _schema(c) -> None:
     c.executescript("""
     create table if not exists files(path text primary key, sha text, title text, status text, superseded_by text, summary text);
     create virtual table if not exists t using fts5(title, head, body, path unindexed, tokenize='unicode61 remove_diacritics 2');
@@ -279,7 +350,11 @@ def connect(root: Path, cfg: dict, create: bool = True) -> sqlite3.Connection:
         c.execute("insert into chunks(cid, path) select rowid, path from t")
         c.execute("insert or replace into meta values ('schema', '2')")
         c.commit()
-    return c
+
+
+def index_format(c) -> str | None:
+    row = c.execute("select v from meta where k='format'").fetchone()
+    return row[0] if row else None
 
 
 def chunk_ids(c, path: str) -> list[int]:
@@ -308,6 +383,16 @@ def cmd_build(root: Path, cfg: dict):
     t0 = time.time()
     c = connect(root, cfg)
     known = {p: s for p, s in c.execute("select path, sha from files")}
+    fmt = index_format(c)
+    if fmt != INDEX_FORMAT:
+        # ADR-006: Hash-Vergleich allein erkennt keine geänderte Verarbeitung — alles neu aufbauen.
+        if known:
+            had_emb = c.execute("select count(*) from emb").fetchone()[0] > 0
+            print(f"Indexformat {fmt or 'alt'} → {INDEX_FORMAT}: Vollneubau"
+                  + (" (Vektoren danach mit `embed` neu erzeugen)" if had_emb else ""), file=sys.stderr)
+        for tbl in ("t", "chunks", "files", "emb", "links", "ent"):
+            c.execute(f"delete from {tbl}")
+        known = {}
     cap, mn = cfg["index"]["max_chunk_chars"], cfg["index"]["min_chunk_chars"]
     seen, changed, texts = set(), 0, {}
     for rel in walk(root, cfg):
@@ -404,6 +489,8 @@ def cmd_build(root: Path, cfg: dict):
                 for d, lab in ds:
                     c.execute("insert into ent values (?,?,?,?)", (d, eid, lab, len(ds))); nent += 1
     c.execute("insert or replace into meta values ('built', ?)", (time.strftime("%Y-%m-%dT%H:%M:%S"),))
+    c.execute("insert or replace into meta values ('format', ?)", (INDEX_FORMAT,))
+    c.execute("insert or replace into meta values ('version', ?)", (__version__,))
     c.commit()
     n_chunks = c.execute("select count(*) from t").fetchone()[0]
     n_links = c.execute("select count(*) from links").fetchone()[0] // 2
@@ -440,9 +527,18 @@ def file_scores(lists: list[list[int]], cpath: dict, k: int) -> dict:
 
 def embed_texts(cfg, texts: list[str]) -> list[list[float]]:
     e = cfg["embedding"]
-    req = urllib.request.Request(e["url"] + "/api/embed", json.dumps({"model": e["model"], "input": texts}).encode(),
+    req = urllib.request.Request(e["url"].rstrip("/") + "/api/embed",
+                                 json.dumps({"model": e["model"], "input": texts}).encode(),
                                  {"Content-Type": "application/json"})
-    return json.load(urllib.request.urlopen(req, timeout=300))["embeddings"]
+    try:
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            vecs = json.load(resp)["embeddings"]
+    except (OSError, ValueError, KeyError, TypeError) as ex:   # URLError/HTTPError/Timeout sind OSError
+        raise WikitilaError(f"Embedding-Dienst {e['url']} (Modell {e['model']}) nicht nutzbar: {str(ex)[:120]}")
+    if not isinstance(vecs, list) or len(vecs) != len(texts):
+        raise WikitilaError(f"Embedding-Dienst {e['url']} lieferte {len(vecs) if isinstance(vecs, list) else 0} "
+                            f"statt {len(texts)} Vektoren")
+    return vecs
 
 
 def dense_list(c, cfg, q: str, n=60) -> list[int]:
@@ -452,7 +548,7 @@ def dense_list(c, cfg, q: str, n=60) -> list[int]:
         return []
     ids = [r[0] for r in rows]
     M = np.frombuffer(b"".join(r[1] for r in rows), dtype="float32").reshape(len(rows), -1)
-    v = np.array(embed_texts(cfg, [q])[0], dtype="float32"); v /= np.linalg.norm(v)
+    v = np.array(embed_texts(cfg, [q])[0], dtype="float32"); v /= (np.linalg.norm(v) or 1.0)
     return [ids[i] for i in np.argsort(-(M @ v))[:n]]
 
 
@@ -770,9 +866,9 @@ def require_index(root, cfg) -> sqlite3.Connection:
 
 
 def cmd_search(root, cfg, a):
-    c = require_index(root, cfg)
-    t0 = time.time()
-    res = search(c, cfg, a.query, a.k)
+    with contextlib.closing(require_index(root, cfg)) as c:
+        t0 = time.time()
+        res = search(c, cfg, a.query, a.k)
     dt = (time.time() - t0) * 1000
     if a.json:
         print(json.dumps({**res, "ms": round(dt)}, ensure_ascii=False, indent=1)); return
@@ -799,9 +895,9 @@ def cmd_search(root, cfg, a):
 
 def cmd_coverage(root, cfg, a):
     """Pre-Flight: wie gut deckt der Index die Frage ab (ohne Ranking). Analog zu `check_answerable`."""
-    c = require_index(root, cfg)
-    t0 = time.time()
-    cov = coverage_grade(c, cfg, a.query)
+    with contextlib.closing(require_index(root, cfg)) as c:
+        t0 = time.time()
+        cov = coverage_grade(c, cfg, a.query)
     dt = (time.time() - t0) * 1000
     if a.json:
         print(json.dumps({**cov, "ms": round(dt)}, ensure_ascii=False, indent=1)); return
@@ -817,8 +913,15 @@ def cmd_coverage(root, cfg, a):
 
 # ---------- Embedding (optional) ----------
 def cmd_embed(root, cfg):
-    import numpy as np
-    c = require_index(root, cfg)
+    try:
+        import numpy as np
+    except ImportError:
+        raise WikitilaError("embed braucht numpy (`pip install numpy`). Embedding ist optional, die Suche läuft ohne.")
+    with contextlib.closing(require_index(root, cfg)) as c:
+        _embed(c, cfg, np)
+
+
+def _embed(c, cfg, np):
     rows = c.execute("select rowid, title, head, body from t").fetchall()
     have = {h for (h,) in c.execute("select h from emb")}
     todo = []
@@ -831,7 +934,8 @@ def cmd_embed(root, cfg):
     for i in range(0, len(todo), 32):
         batch = todo[i:i + 32]
         vs = np.array(embed_texts(cfg, [x[2] for x in batch]), dtype="float32")
-        vs /= np.linalg.norm(vs, axis=1, keepdims=True)
+        norm = np.linalg.norm(vs, axis=1, keepdims=True)
+        vs /= np.where(norm == 0, 1, norm)   # Nullvektor nicht durch 0 teilen
         for (cid, hh, _), v in zip(batch, vs):
             c.execute("insert or replace into emb values (?,?,?)", (cid, hh, v.tobytes()))
         c.commit()
@@ -841,9 +945,52 @@ def cmd_embed(root, cfg):
 
 
 # ---------- Messung ----------
+def load_jsonl(path: str, required: dict) -> list[dict]:
+    """Liest ein Golden Set/einen Katalog (JSON Lines). required: {schlüssel: typ}. Fehler mit Zeilennummer."""
+    p = Path(path)
+    if not p.is_file():
+        raise WikitilaError(f"Datei nicht gefunden: {path}")
+    try:
+        lines = p.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError) as e:
+        raise WikitilaError(f"Datei unlesbar: {path}: {e}")
+    out = []
+    for i, line in enumerate(lines, 1):
+        if not line.strip() or line.lstrip().startswith("//"):
+            continue
+        try:
+            g = json.loads(line)
+        except ValueError as e:
+            raise WikitilaError(f"{path}:{i}: kein gültiges JSON ({e})")
+        if not isinstance(g, dict):
+            raise WikitilaError(f"{path}:{i}: erwartet ein JSON-Objekt je Zeile")
+        for key, typ in required.items():
+            if not isinstance(g.get(key), typ):
+                raise WikitilaError(f"{path}:{i}: Feld '{key}' fehlt oder hat den falschen Typ "
+                                    f"(erwartet {typ.__name__})")
+        out.append(g)
+    if not out:
+        raise WikitilaError(f"{path} enthält keine Fälle.")
+    return out
+
+
+def pct(values: list[float], p: float) -> float:
+    """Perzentil nach Nearest-Rank (gleiche Definition wie validate_catalog.py)."""
+    sl = sorted(values)
+    return sl[max(0, math.ceil(len(sl) * p) - 1)] if sl else 0.0
+
+
 def cmd_eval(root, cfg, a):
-    c = require_index(root, cfg)
-    gold = [json.loads(l) for l in Path(a.golden).read_text(encoding="utf-8").splitlines() if l.strip()]
+    alle = load_jsonl(a.golden, {"q": str, "expect": list})
+    with contextlib.closing(require_index(root, cfg)) as c:
+        _eval(c, cfg, a, alle)
+
+
+def _eval(c, cfg, a, alle):
+    gold = [g for g in alle if g["expect"]]   # Negativfälle (expect leer) misst validate_catalog.py, nicht eval
+    if not gold:
+        raise WikitilaError(f"Golden Set {a.golden} enthält keine Fälle mit erwarteter Datei (expect).")
+    skipped = len(alle) - len(gold)
     variants = {"BM25": dict(graph=False, dense=False, filename=False, decision=False),
                 "BM25 + Dateiname": dict(graph=False, dense=False, filename=True, decision=False),
                 "BM25 + Dateiname + Graph": dict(graph=True, dense=False, filename=True, decision=False)}
@@ -864,12 +1011,11 @@ def cmd_eval(root, cfg, a):
             rk = next((i + 1 for i, h in enumerate(res["results"]) if h["path"] in exp), None)
             ranks.append(rk)
         n = len(ranks)
-        if not n:
-            raise WikitilaError(f"Golden Set {a.golden} enthält keine Fälle.")
         rec = lambda k: sum(1 for x in ranks if x and x <= k) / n
         mrr = sum(1 / x for x in ranks if x) / n
         print(f"{name:28s} R@1 {rec(1):.2f} R@3 {rec(3):.2f} R@5 {rec(5):.2f} R@10 {rec(10):.2f} MRR {mrr:.3f} "
-              f"p50 {sorted(lat)[n//2]*1000:.0f}ms p95 {sorted(lat)[int(n*0.95)-1]*1000:.0f}ms (n={n})")
+              f"p50 {pct(lat, 0.5)*1000:.0f}ms p95 {pct(lat, 0.95)*1000:.0f}ms (n={n}"
+              + (f", {skipped} ohne expect übersprungen" if skipped else "") + ")")
         if a.misses:
             for g, x in zip(gold, ranks):
                 if not x:
@@ -887,6 +1033,26 @@ def cmd_status(root, cfg):
           cfg["decision"]["model"] if cfg["decision"]["enabled"] else "aus")
     for w in cfg["_authority"].get("warnings", []):
         print("Hinweis:", w)
+    for w in index_hints(c, cfg):
+        print("Hinweis:", w)
+    c.close()
+
+
+def index_hints(c, cfg) -> list[str]:
+    """Hinweise zum Indexzustand: veraltetes Format, Register-Pfade ohne Datei im Index."""
+    out = []
+    fmt = index_format(c)
+    if fmt != INDEX_FORMAT:
+        out.append(f"Indexformat {fmt or 'alt'} ist veraltet (aktuell {INDEX_FORMAT}) — `build` baut ihn vollständig neu")
+    reg = cfg.get("_authority") or {}
+    paths = {p for (p,) in c.execute("select path from files")}
+    regp = set(reg.get("meta", {})) | set(reg.get("superseded_by", {}))
+    missing = sorted(p for p in regp if p not in paths)
+    for p in missing[:10]:
+        out.append(f"Register-Pfad nicht im Index (Tippfehler, verschoben oder ignoriert?): {p}")
+    if len(missing) > 10:
+        out.append(f"… und {len(missing) - 10} weitere Register-Pfade nicht im Index")
+    return out
 
 
 def cmd_manifest(root: Path, cfg: dict, a):
@@ -969,9 +1135,11 @@ def cmd_check(root: Path, cfg: dict, a) -> bool:
     """
     db = root / cfg["index"]["db"]
     known = {}
+    fmt_alt = False
     if db.exists():
         with contextlib.closing(connect(root, cfg)) as c:
             known = {p: s for p, s in c.execute("select path, sha from files")}
+            fmt_alt = bool(known) and index_format(c) != INDEX_FORMAT
     if not db.exists():
         print(f"  Kein Index unter {db}.")
     seen = {}
@@ -982,7 +1150,9 @@ def cmd_check(root: Path, cfg: dict, a) -> bool:
         seen[rel] = hashlib.sha1(raw.encode("utf-8", "ignore")).hexdigest()
     new_changed = [p for p, s in seen.items() if known.get(p) != s]
     removed = [p for p in known if p not in seen]
-    drift = bool(new_changed or removed)
+    drift = bool(new_changed or removed or fmt_alt)
+    if fmt_alt:
+        print(f"  Indexformat veraltet (aktuell {INDEX_FORMAT}) — `build` baut den Index vollständig neu.")
     print(f"Quellstand: {len(seen)} Dateien im Scope, Index: {len(known)} Dateien, "
           f"{len(new_changed)} neu/geändert, {len(removed)} entfernt")
     if drift:
@@ -996,27 +1166,207 @@ def cmd_check(root: Path, cfg: dict, a) -> bool:
     return drift
 
 
+# ---------- Lint (Schreibseite) ----------
+LINT_EXT = (".md",)  # nur Markdown trägt Frontmatter; .txt bleibt im Such-Scope, aber außerhalb von lint
+
+
+def lint_excluded(rel: str, pats: list[str]) -> bool:
+    """True, wenn die Datei von lint ausgenommen ist (Muster auf Dateiname oder relativen Pfad,
+    ohne Groß-/Kleinschreibung: `*template*` trifft auch `TEMPLATE.md`)."""
+    rel_l = rel.lower()
+    name = rel_l.rsplit("/", 1)[-1]
+    return any(fnmatch.fnmatchcase(name, p.lower()) or fnmatch.fnmatchcase(rel_l, p.lower()) for p in pats)
+
+
+def lint_text(text: str, cfg: dict) -> tuple[list[str], list[str]]:
+    """Prüft den Rohtext einer Datei gegen die Schreib-Konvention ([lint] in wikitila.toml).
+
+    Verstösse = was der Index nicht verwerten kann: kein Frontmatter oder ein
+    Pflichtfeld aus `require` fehlt/ist leer — gelesen mit derselben
+    parse_doc-Logik wie der Build, damit „lint-konform = index-optimal" gilt.
+    Hinweise = Konventionen ohne Suchbruch: unquotierter Doppelpunkt (bricht
+    strikte YAML-Parser), status ausserhalb `status_values`, strukturlose
+    Frontmatter-Zeilen. Hinweise haben keinen Einfluss auf den Exit-Code.
+    """
+    errors: list[str] = []
+    notes: list[str] = []
+    m, text = frontmatter(text)   # gleiche Erkennung wie parse_doc (BOM, leerer Block, Block am Dateiende)
+    if not m:
+        if text.startswith("---"):
+            errors.append("Frontmatter nicht abgeschlossen (schließende '---'-Zeile fehlt)")
+        else:
+            errors.append("kein Frontmatter (Datei beginnt nicht mit '---')")
+        return errors, notes
+    for line in (m.group(1) or "").splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        km = FM_KEY_RE.match(line)
+        if km:
+            val = km.group(2).strip()
+            if val and not val.startswith(("\"", "'", "[", "{", "|", ">")) and ": " in val:
+                notes.append(f"'{km.group(1)}' enthält einen unquotierten Doppelpunkt — strikte YAML-Parser "
+                             "brechen daran, den Wert in Anführungszeichen setzen")
+        elif not line.startswith((" ", "\t", "- ")):
+            notes.append(f"Frontmatter-Zeile ohne erkennbare Struktur: {line[:40]!r}")
+    fm, _ = parse_doc(text)  # bewusst dieselbe Sicht wie der Index
+    for field in cfg["lint"]["require"]:
+        if not fm.get(field):
+            errors.append(f"Pflichtfeld '{field}' fehlt oder ist leer (der Index liest es nicht)")
+    status = fm.get("status")
+    sv = cfg["lint"]["status_values"]
+    if status and sv and status not in sv:
+        notes.append(f"'status' außerhalb der Konvention ({'/'.join(sv)}): {status!r}")
+    return errors, notes
+
+
+def cmd_lint(root: Path, cfg: dict, a) -> bool:
+    """Schreibseite prüfen: Frontmatter gegen [lint] aus wikitila.toml.
+
+    Einzeldatei (`lint <datei>`) oder Gesamt-Report (`lint --all [--json]`).
+    Rückgabe: True, wenn Verstösse gefunden wurden (main gibt dann Exit 1).
+    """
+    lcfg = cfg.get("lint", {})
+    pats = [str(p) for p in (lcfg.get("exclude") or [])]
+    since = str(lcfg.get("since") or "").strip()
+    cutoff = None
+    if since:
+        try:
+            cutoff = time.mktime(time.strptime(since, "%Y-%m-%d"))
+        except ValueError:
+            raise WikitilaError(f"[lint] since ungültig (erwartet JJJJ-MM-TT): {since!r}")
+    hide = cfg["privacy"]["mask_secrets"]
+
+    def pruefe(rel: str, raw: str) -> dict:
+        errors, notes = lint_text(raw, cfg)
+        if hide:
+            errors, notes = [mask(e) for e in errors], [mask(n) for n in notes]
+        return {"path": rel, "errors": errors, "notes": notes}
+
+    if a.all:
+        ergebnisse, ok, ausgenommen = [], 0, 0
+        for rel in walk(root, cfg):
+            if not rel.lower().endswith(LINT_EXT):
+                continue  # .txt u. a.: kein Frontmatter-Format, nicht Teil der Schreib-Konvention
+            if lint_excluded(rel, pats) or (cutoff is not None and os.path.getmtime(root / rel) < cutoff):
+                ausgenommen += 1
+                continue
+            raw = read_source(root, rel)
+            if raw is None:
+                continue
+            e = pruefe(rel, raw)
+            if e["errors"] or e["notes"]:
+                ergebnisse.append(e)
+            else:
+                ok += 1
+        ver = [e for e in ergebnisse if e["errors"]]
+        hin = [e for e in ergebnisse if not e["errors"]]
+        if a.json:
+            print(json.dumps({"checked": ok + len(ergebnisse), "ok": ok, "notes": len(hin),
+                              "violations": len(ver), "excluded": ausgenommen,
+                              "files": ergebnisse}, ensure_ascii=False, indent=1))
+        else:
+            print(f"Lint: {ok + len(ergebnisse)} geprüft, {ok} konform, {len(hin)} mit Hinweisen, "
+                  f"{len(ver)} mit Verstößen, {ausgenommen} ausgenommen")
+            for e in ergebnisse:
+                tag = "VERSTOSS" if e["errors"] else "HINWEIS"
+                erstes = e["errors"][0] if e["errors"] else e["notes"][0]
+                print(f"  {tag} {e['path']}: {erstes}")
+        return bool(ver)
+
+    arg = getattr(a, "path", None)
+    if not arg:
+        raise WikitilaError("lint braucht eine Datei (`lint <datei>`) oder --all.")
+    # Hooks übergeben oft absolute Pfade; relative gelten zum Ordner (--root).
+    p = Path(arg) if Path(arg).is_absolute() else root / arg
+    try:
+        rel = p.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        raise WikitilaError(f"Datei liegt außerhalb des Ordners ({root}): {arg}")
+    if not (root / rel).is_file():
+        raise WikitilaError(f"Datei nicht gefunden: {arg}")
+    if not rel.lower().endswith(LINT_EXT) or lint_excluded(rel, pats):
+        # Ausgenommen ist kein Fehler: ein Hook auf README.md oder notizen.txt bleibt bei Exit 0.
+        if a.json:
+            print(json.dumps({"path": rel, "excluded": True, "errors": [], "notes": []}, ensure_ascii=False, indent=1))
+        else:
+            print(f"AUSGENOMMEN — {rel} fällt nicht unter die Schreib-Konvention ([lint] exclude bzw. kein .md)")
+        return False
+    raw = read_source(root, rel)
+    if raw is None:
+        raise WikitilaError(f"Datei unlesbar oder zu gross: {rel}")
+    e = pruefe(rel, raw)
+    if a.json:
+        print(json.dumps(e, ensure_ascii=False, indent=1))
+        return bool(e["errors"])
+    for n in e["notes"]:
+        print(f"  HINWEIS: {n}")
+    if e["errors"]:
+        for err in e["errors"]:
+            print(f"  VERSTOSS: {err}")
+        n = len(e["errors"])
+        print(f"{rel}: {n} Verstoß" + ("" if n == 1 else "e"))
+    else:
+        print(f"OK — {rel} erfüllt die Schreib-Konvention" + (f" ({len(e['notes'])} Hinweis(e))" if e["notes"] else ""))
+    return bool(e["errors"])
+
+
+def positive_int(v: str) -> int:
+    try:
+        n = int(v)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"ganze Zahl erwartet: {v!r}")
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"muss ≥ 1 sein: {n}")
+    return n
+
+
 def main():
+    if sys.version_info < (3, 11):
+        print(f"FEHLER: LLM-Wikitila braucht Python ≥ 3.11 (gefunden {sys.version.split()[0]}: {sys.executable}).",
+              file=sys.stderr)
+        sys.exit(2)
+    if sqlite3 is None:
+        print(f"FEHLER: Dieses Python ({sys.executable}) hat kein sqlite3-Modul. Ein anderes Python ≥ 3.11 nutzen "
+              "(z. B. das System-Python) oder Python mit SQLite-Unterstützung neu bauen.", file=sys.stderr)
+        sys.exit(2)
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--root", default=os.environ.get("WIKITILA_ROOT", "."))
     ap.add_argument("--version", action="version", version=f"LLM-Wikitila {__version__}")
+    ap.add_argument("--root", default=os.environ.get("WIKITILA_ROOT", "."))
     sp = ap.add_subparsers(dest="cmd", required=True)
     sp.add_parser("build"); sp.add_parser("embed"); sp.add_parser("status"); sp.add_parser("manifest"); sp.add_parser("check")
-    s = sp.add_parser("search"); s.add_argument("query"); s.add_argument("-k", type=int, default=5); s.add_argument("--json", action="store_true")
+    s = sp.add_parser("search"); s.add_argument("query"); s.add_argument("-k", type=positive_int, default=5); s.add_argument("--json", action="store_true")
     cv = sp.add_parser("coverage"); cv.add_argument("query"); cv.add_argument("--json", action="store_true")
+    l = sp.add_parser("lint"); l.add_argument("path", nargs="?"); l.add_argument("--all", action="store_true"); l.add_argument("--json", action="store_true")
     e = sp.add_parser("eval"); e.add_argument("golden"); e.add_argument("--variants", action="store_true"); e.add_argument("--misses", action="store_true")
     a = ap.parse_args()
     root = Path(a.root).resolve()
     try:
+        if not root.is_dir():
+            raise WikitilaError(f"Ordner nicht gefunden: {root} (--root bzw. WIKITILA_ROOT prüfen)")
         cfg = load_cfg(root)
         cmds = {"build": lambda: cmd_build(root, cfg), "embed": lambda: cmd_embed(root, cfg),
                 "status": lambda: cmd_status(root, cfg), "manifest": lambda: cmd_manifest(root, cfg, a),
                 "check": lambda: cmd_check(root, cfg, a), "search": lambda: cmd_search(root, cfg, a),
-                "coverage": lambda: cmd_coverage(root, cfg, a), "eval": lambda: cmd_eval(root, cfg, a)}
-        cmds[a.cmd]()
+                "coverage": lambda: cmd_coverage(root, cfg, a), "eval": lambda: cmd_eval(root, cfg, a),
+                "lint": lambda: cmd_lint(root, cfg, a)}
+        rc = cmds[a.cmd]()
+        if a.cmd == "lint" and rc:  # einziger Befehl mit Exit 1 bei Verstößen (CI-/Agenten-Gating)
+            sys.exit(1)
     except WikitilaError as e:
         print(f"FEHLER: {e}", file=sys.stderr)
         sys.exit(2)
+    except sqlite3.Error as e:
+        hint = (" — dieses SQLite hat kein FTS5; ein Python mit FTS5-fähigem SQLite nutzen" if "fts5" in str(e).lower()
+                else " — Index beschädigt? `.wikitila/` löschen und `build` erneut ausführen" if any(x in str(e).lower() for x in ("malformed", "not a database"))
+                else "")
+        print(f"FEHLER: SQLite: {e}{hint}", file=sys.stderr)
+        sys.exit(2)
+    except KeyboardInterrupt:
+        print("Abgebrochen.", file=sys.stderr)
+        sys.exit(130)
+    except BrokenPipeError:   # Ausgabe in `head` o. ä. umgeleitet und vorzeitig geschlossen
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        sys.exit(1)
 
 
 if __name__ == "__main__":

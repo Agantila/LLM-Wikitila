@@ -16,12 +16,18 @@ Der Katalog erweitert das Golden-Set-Schema um:
            belegt_gueltigkeit_unbestaetigt | nicht_belegt
 
 Aufruf:
-  python3 validate_catalog.py --root <vault> --catalog <golden_catalog.jsonl> [-k 10]
+  python3 validate_catalog.py --root <vault> --catalog <golden_catalog.jsonl> [-k 10] [--gate]
+
+--gate (für CI): Exit 1, wenn ein positiv/authority-Fall nicht unter den Top-k steht,
+eine coverage-Datei fehlt, ein positiv/authority-Fall einen anderen Antwortstatus als
+`answer` liefert oder ein Negativfall ohne Abstention-Signal bleibt. Dass Negativfälle
+trotzdem einen Treffer liefern, ist kein Gate-Kriterium (ADR-005: Antwort-Tor bleibt Signal).
+Bedien- und Katalogfehler: Exit 2.
 """
 
 from __future__ import annotations
 
-import argparse, json, math, sys, time
+import argparse, sys, time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -35,24 +41,60 @@ def rank_of(res: list[dict], expect: set[str]) -> int | None:
     return None
 
 
+KINDS = ("positiv", "authority", "coverage", "negativ")
+STATUS = {"belegt", "widersprüchlich", "belegt_gueltigkeit_unbestaetigt", "nicht_belegt"}
+
+
+def norm_status(s: str) -> str:
+    """Katalog darf ASCII schreiben (widerspruechlich); die Ausgabe nutzt widersprüchlich."""
+    return "widersprüchlich" if s == "widerspruechlich" else s
+
+
+def load_catalog(path: str) -> list[dict]:
+    gold = W.load_jsonl(path, {"q": str, "kind": str, "expect": list})
+    for i, g in enumerate(gold, 1):
+        if g["kind"] not in KINDS:
+            raise W.WikitilaError(f"{path}: Fall {i} ({g['q'][:40]!r}): kind {g['kind']!r} unbekannt "
+                                  f"(erlaubt: {', '.join(KINDS)})")
+        if "passage" in g and not (isinstance(g["passage"], list) and all(isinstance(x, str) for x in g["passage"])):
+            raise W.WikitilaError(f"{path}: Fall {i}: passage muss eine Liste von Texten sein")
+        if g.get("answer") is not None and norm_status(g["answer"]) not in STATUS:
+            raise W.WikitilaError(f"{path}: Fall {i}: answer {g['answer']!r} unbekannt (erlaubt: {', '.join(sorted(STATUS))})")
+    return gold
+
+
 def main() -> None:
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description="Katalog-Validierung (Recall, Passage, Coverage, Negativ, Antwortstatus)")
     ap.add_argument("--root", default=".")
     ap.add_argument("--catalog", required=True)
-    ap.add_argument("-k", type=int, default=10)
+    ap.add_argument("-k", type=W.positive_int, default=10)
+    ap.add_argument("--gate", action="store_true", help="Exit 1 bei verletztem Abnahmekriterium (CI)")
     a = ap.parse_args()
 
     root = Path(a.root).resolve()
     try:
+        if not root.is_dir():
+            raise W.WikitilaError(f"Ordner nicht gefunden: {root}")
         cfg = W.load_cfg(root)
+        gold = load_catalog(a.catalog)
         c = W.require_index(root, cfg)
     except W.WikitilaError as e:
-        sys.exit(f"FEHLER: {e}")
-    indexed = {p for (p,) in c.execute("select path from files")}
+        print(f"FEHLER: {e}", file=sys.stderr)
+        sys.exit(2)
+    try:
+        failed = run(c, cfg, gold, a)
+    finally:
+        c.close()
+    if a.gate and failed:
+        print(f"\nGATE: nicht bestanden ({'; '.join(failed)})")
+        sys.exit(1)
+    if a.gate:
+        print("\nGATE: bestanden")
 
-    gold = [json.loads(l) for l in Path(a.catalog).read_text(encoding="utf-8").splitlines() if l.strip()]
-    if not gold:
-        sys.exit(f"FEHLER: Katalog {a.catalog} enthält keine Fälle.")
+
+def run(c, cfg, gold: list[dict], a) -> list[str]:
+    """Misst den Katalog und druckt den Bericht. Rückgabe: verletzte Gate-Kriterien."""
+    indexed = {p for (p,) in c.execute("select path from files")}
 
     # --- Teilmenge für Datei-Recall: indexierbare Fälle mit erwarteter Datei ---
     indexable = [g for g in gold if g["kind"] in ("positiv", "authority") and g["expect"]]
@@ -67,12 +109,23 @@ def main() -> None:
     neg_signal = 0
     neg_coverage_partial = 0
     neg_detail = []
+    neg_nosignal = []
+    ans_total = ans_ok = 0
+    ans_fail = []
 
     for g in gold:
         t0 = time.time()
         full = W.search(c, cfg, g["q"], a.k)
         res = full["results"]
         lat.append(time.time() - t0)
+
+        if g.get("answer") and g["kind"] != "coverage":
+            ans_total += 1
+            got = full.get("answer_status")
+            if got == norm_status(g["answer"]):
+                ans_ok += 1
+            else:
+                ans_fail.append((g["q"], g["kind"], norm_status(g["answer"]), got))
 
         if g["kind"] in ("positiv", "authority"):
             expect = set(g["expect"])
@@ -112,18 +165,20 @@ def main() -> None:
             if full.get("answer_status") != "nicht_belegt":
                 neg_nonempty += 1
                 neg_detail.append((g["q"], res[0]["path"] if res else "-", (res[0]["snippet"][:70] if res else "")))
-            if full.get("unmatched_terms") or full.get("top1_missing_terms"):
+            sig = bool(full.get("unmatched_terms") or full.get("top1_missing_terms"))
+            if sig:
                 neg_signal += 1
             if full.get("term_coverage", 1.0) < 1.0:
                 neg_coverage_partial += 1
+            if not sig and full.get("term_coverage", 1.0) >= 1.0 and full.get("answer_status") != "nicht_belegt":
+                neg_nosignal.append(g["q"])
 
     # --- Auswertung ---
     n = len(ranks)
     rec = lambda k: sum(1 for x in ranks if x and x <= k) / n if n else 0.0
     mrr = sum(1 / x for x in ranks if x) / n if n else 0.0
     # Latenz über alle Katalogfälle (nicht nur die Recall-Teilmenge), Index nach Nearest-Rank
-    sl = sorted(lat)
-    ms = lambda p: sl[max(0, math.ceil(len(sl) * p) - 1)] * 1000 if sl else 0
+    ms = lambda p: W.pct(lat, p) * 1000
 
     print(f"Katalog: {len(gold)} Fälle "
           f"({sum(1 for g in gold if g['kind']=='positiv')} positiv, "
@@ -146,7 +201,7 @@ def main() -> None:
           f"{passage_full1}/{passage_total} ({passage_full1/max(1,passage_total):.0%})  |  "
           f"irgendein Top-{a.k}-Snippet: {passage_topk}/{passage_total} ({passage_topk/max(1,passage_total):.0%})")
     if passage_fail:
-        print("  Beleg fehlt im Top-1-Snippet:")
+        print(f"  Beleg fehlt in allen Top-{a.k}-Snippets:")
         for q, kw, top in passage_fail:
             print(f"    - {q[:70]}  benötigt {kw}  (top1={top})")
 
@@ -167,9 +222,26 @@ def main() -> None:
         for q, p, s in neg_detail:
             print(f"    - {q[:60]} -> {p}  «{s}»")
 
+    print("\n== 5. Antwortstatus (Feld answer, positiv/authority/negativ) ==")
+    print(f"{ans_ok}/{ans_total} wie erwartet")
+    for q, kind, exp, got in ans_fail:
+        print(f"    - [{kind}] {q[:60]}  erwartet {exp}, geliefert {got}")
+
+    failed = []
+    if any(not r for r in ranks):
+        failed.append(f"Datei-Recall@{a.k} < 1,00")
+    if cov_missing:
+        failed.append(f"{len(cov_missing)} coverage-Datei(en) nicht im Index")
+    pos_ans_fail = [f for f in ans_fail if f[1] in ("positiv", "authority")]
+    if pos_ans_fail:
+        failed.append(f"{len(pos_ans_fail)} positiv/authority-Fall/Fälle mit falschem Antwortstatus")
+    if neg_nosignal:
+        failed.append(f"{len(neg_nosignal)} Negativfall/-fälle ohne Abstention-Signal")
+
     print("\n== Einordnung ==")
     print("Datei-Recall ist KEIN Nachweis für Antwortqualität. Passagen-Präsenz, "
           "Negativ-Abstention und Coverage sind die eigentlichen Vertrauensmetriken.")
+    return failed
 
 
 if __name__ == "__main__":

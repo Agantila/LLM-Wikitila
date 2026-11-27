@@ -1,4 +1,6 @@
 ---
+title: Preise (alte Fassung)
+description: "Abgelöste Preisfassung des Starter-Pakets."
 status: superseded
 superseded_by: preise_aktuell.md
 ---

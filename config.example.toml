@@ -46,3 +46,10 @@ mask_secrets = true        # Schlüssel und Passwörter erscheinen nie in Fundst
 [authority]
 enabled = true             # Authority-Register (kanonische Quelle, Ablösung, Freshness) anwenden
 register = ""              # Pfad zur authority_register.json relativ zum Ordner; leer = <ordner>/authority_register.json
+
+[lint]                     # Schreibseite: wikitila.py lint prüft das Frontmatter neuer Dateien
+require = ["title", "description"]   # Pflichtfelder, flache Zeilen (der Index liest title/description/status/superseded_by)
+status_values = ["draft", "stable", "deprecated", "superseded"]   # andere Werte: Hinweis; superseded wertet der Index ab
+# exclude: Muster auf Dateiname oder Pfad, ohne Groß-/Kleinschreibung; geprüft werden nur .md-Dateien
+exclude = ["index.md", "log.md", "README.md", "CHANGELOG.md", "CLAUDE.md", "AGENTS.md", "MASTER.md", "copy_*", "*template*"]
+since = ""                 # optional JJJJ-MM-TT: nur Dateien prüfen, die seit diesem Datum geändert wurden

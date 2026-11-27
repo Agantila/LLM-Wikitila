@@ -18,7 +18,10 @@ LLM-Wikitila is a **local, evidence-oriented hybrid**: deterministic full-text s
 | **Answer gate** | Four answer statuses + abstention signals | model-free, deterministic |
 | **Source manifest** | Coverage report | `manifest` → `.wikitila/source_manifest.json` |
 | **Index/source consistency** | Detect drift | `check` (new/changed/removed) |
+| **Write side** | Frontmatter convention for new files | `lint` (required fields from `[lint]` in wikitila.toml, two tiers violation/note, same reading view as the index) |
 | **Knowledge graph** (optional) | Navigation, cross-references, lint candidates | Graphify + small local model, no thinking |
+
+From the frontmatter, the index reads only `title`, `description`, `status` and `superseded_by` — as flat `key: value` lines (no lists, no nesting). `tags`, `type` and other fields have no effect on search (they work e.g. in Obsidian). `lint` checks exactly this reading view: required fields (`require`) are parsed with the same logic as the build, so "lint-clean = index-optimal" holds by construction.
 
 ## Data flow
 
