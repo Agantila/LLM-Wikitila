@@ -8,8 +8,7 @@ Priorität: P1 = als Nächstes · P2 = bald · P3 = bei Gelegenheit. Status: ✅
 |---|---|---|---|---|
 | B-021 | P2 | 🟡 | Doku-Teil erledigt (indexierte Frontmatter-Felder in architecture.de/en, README, Prompts). Offen: Entscheidung tags/type indexieren (Messung, dann ADR) | Review 2026-11-27 (F3) |
 | B-022 | P3 | 🟡 | Demo-Korpus lint-konform, ein description-Fall im Katalog, `lint --all` als CI-Gate ✅. Offen: Katalogfall nur über `status` erreichbar (Unit-Test deckt es ab) | Review 2026-11-27 (F5) |
-| B-027 | P2 | ⏳ | Owner-Messung nach Release: erster `build` mit Vollneubau (ADR-006), dann Katalog — erst diese Zahlen gelten für B-010/B-015/B-016 | Plan 2026-11-27-produktionsreife |
-| B-010 | P2 | 🟡 | MRR 0,776 (Owner-Messung 2026-11-15) → ≥ 0,80: Ranking aggregiert jetzt bis zu drei Chunks; verfehlte Ränge am Owner-Vault nachmessen | Plan 2026-11-25, validation.md |
+| B-010 | P1 | ⚠️ | Referenz-Vault 2026-11-27 (v0.4.0, 1.549 Dateien): R@10 0,94, MRR 0,682 (2026-11-15: 1,00 / 0,776) → Ziel R@10 1,00, MRR ≥ 0,80. Zwei Fehltreffer durch Ranking-Konkurrenz im gewachsenen Vault analysieren | Plan 2026-11-25, B-027 |
 | B-015 | P2 | 🟡 | Passagen-Präsenz 42 % → höher: Authority-Wert-Chunks, Frontmatter-Status, kurze Abschnitte indexiert; Owner-Messung offen | Plan 2026-11-25 |
 | B-016 | P2 | 🟡 | Semantische Abstention 7/8 FP → Coverage-Note (`term_coverage`/`uncovered`) umgesetzt; Antwort-Tor bleibt Signal-only (ADR-005), Owner-Messung offen | Plan 2026-11-25 |
 | B-011 | P2 | ⏳ | Link-Graph inkrementell statt komplett neu bauen (Regex über alle Texte bei jedem Build) | Review Phase C |
@@ -21,6 +20,7 @@ Priorität: P1 = als Nächstes · P2 = bald · P3 = bei Gelegenheit. Status: ✅
 
 | ID | Thema | Erledigt | Bezug |
 |---|---|---|---|
+| B-027 | Messung im Referenz-Vault nach Release 0.4.0: Vollneubau ohne Messwert-Effekt (Index war faktisch aktuell), R@10 0,94 · MRR 0,682 · Passagen 42 % · Abstention-Signal 8/8 · Antwortstatus 27/44; vault-eigener OKF-Linter durch `lint --all` ersetzt | 2026-11-27 | Sitzung 2026-11-27-vault-einsatz-0.4.0 |
 | B-023 | Indexformat-Version erzwingt Vollneubau nach Upgrade, `check`/`status` melden veraltetes Format | 2026-11-27 | ADR-006, Plan 2026-11-27-produktionsreife |
 | B-024 | Konfigurationsprüfung (Typen, Unbekanntes), Fehlerpfade ohne Traceback (SQLite, Netz, numpy, Python-Version, Strg-C, Broken Pipe), `--root`/`-k`-Validierung, Verbindungen geschlossen | 2026-11-27 | Plan 2026-11-27-produktionsreife |
 | B-025 | `validate_catalog.py --gate`, Antwortstatus-Ebene, Katalogprüfung; `eval` ohne Negativfälle; CI 3.14 + lint + Gate | 2026-11-27 | Plan 2026-11-27-produktionsreife |
