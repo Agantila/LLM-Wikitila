@@ -28,19 +28,33 @@ Work in this order and ASK about every open point before writing anything:
    - Which facts are time-sensitive (stale_after / review date)?
    → fill authority_register.json. ONLY the human owner sets authority_confirmed: true.
 
-4. INDEX & CHECKS
+4. WRITE CONTRACT (search quality is created at write time)
+   - Frontmatter minimum profile for new files: required `title` and `description`
+     as flat lines (`description` in quotes — an unquoted colon breaks strict
+     YAML parsers); recommended `type`, `status`, `tags`.
+     The index reads only title/description/status/superseded_by from frontmatter.
+   - Anchor the convention in the folder's entry-point files
+     (AGENTS.md/CLAUDE.md, only with owner approval): without this reference,
+     agents never see the obligation, and new files are created schema-free.
+   - Set up checking: wikitila.py lint <file> for every new file,
+     wikitila.py lint --all as a recurring target/actual report
+     (required fields, exceptions and start date in wikitila.toml, [lint]).
+   - Acceptance: at least one catalog case whose answer is reachable only via
+     description or status.
+
+5. INDEX & CHECKS
    - wikitila.py --root <folder> build
    - wikitila.py --root <folder> manifest   (coverage: what is excluded and why)
    - wikitila.py --root <folder> check      (drift 0)
    - add .wikitila/ to .gitignore.
 
-5. ACCEPTANCE
+6. ACCEPTANCE
    - Create a question catalog (JSONL, ~50 cases: positive/authority/coverage/negative) with the owner.
    - python3 validate_catalog.py --root . --catalog <catalog>
      Targets: R@10 ≥ 0.95 · MRR ≥ 0.80 · passage presence high · coverage grade < 1.0 on negative cases.
    - Analyze missed cases (register, scope, headings) and fix them.
 
-6. GRAPH (optional, never as the evidence source)
+7. GRAPH (optional, never as the evidence source)
    - Only on explicit approval; state the duration first (≈0.3 documents/s).
    - wikitila_graph.py run --model maternion/ling-3.0-tiny:8b --workers 2, then build.
 
@@ -82,7 +96,17 @@ STEP 3 — FIX REFERENCES:
 - Check MASTER.md/overview, setup and operations docs, skill files; replace dead paths.
 - Change AGENTS.md/CLAUDE.md only with approval.
 
-STEP 4 — ACCEPTANCE:
+STEP 4 — WRITE CONTRACT:
+- Frontmatter minimum profile as in the setup prompt: required `title`/`description`
+  as flat lines, `description` in quotes (the colon trap).
+  The index reads only title/description/status/superseded_by.
+- Anchor the convention in AGENTS.md/CLAUDE.md (with approval) — otherwise
+  agents never see the obligation and new files are created schema-free.
+- Run wikitila.py lint --all as a target/actual report over the existing files;
+  fix violations by priority (required fields/exceptions in wikitila.toml, [lint]).
+- Add a catalog case whose answer is reachable only via description or status.
+
+STEP 5 — ACCEPTANCE:
 - Reuse or create a question catalog (JSONL, ~50 cases).
 - python3 validate_catalog.py --root . --catalog <catalog>
   Targets: R@10 ≥ 0.95 · MRR ≥ 0.80 · passage presence high · coverage grade < 1.0 on negative cases.
@@ -137,7 +161,7 @@ Answer fields: `results` (file, `heading`, `passages` = original passages, `scor
 ## 5. Validation
 
 - Create a question catalog (JSONL, schema: `docs/validation.en.md`) and measure with `python3 validate_catalog.py --root . --catalog <catalog>` (file recall, passage presence, coverage/negatives).
-- Reference values: R@10 1.00 · MRR 0.785 · passages 45% · abstention signal 8/8 · 18/18 tests at measurement time (currently 39/39). MRR is below the 0.80 target (backlog B-010).
+- Reference values: R@10 1.00 · MRR 0.785 · passages 45% · abstention signal 8/8 · 18/18 tests at measurement time (currently 79/79). MRR is below the 0.80 target (backlog B-010).
 - File recall is **not** proof of answer quality.
 
 ## 6. Knowledge graph (optional)

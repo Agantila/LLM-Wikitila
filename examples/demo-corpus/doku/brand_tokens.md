@@ -1,3 +1,8 @@
+---
+title: Marken-Tokens
+description: "Farben und Schrift der Marke."
+status: stable
+---
 # Marken-Tokens
 
 ## Farben

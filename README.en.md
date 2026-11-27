@@ -32,6 +32,9 @@ python3 wikitila.py --root /path/to/project-folder search "What is the current p
 # 3. Check coverage and freshness
 python3 wikitila.py --root /path/to/project-folder manifest
 python3 wikitila.py --root /path/to/project-folder check
+
+# 4. Check the write side (frontmatter convention for new files)
+python3 wikitila.py --root /path/to/project-folder lint --all
 ```
 
 Every answer carries `answer_status` (`belegt` · `widersprüchlich` · `belegt_gueltigkeit_unbestaetigt` · `nicht_belegt`), flags such as `kanonisch` / `überholt durch` / `veraltet`, the original passages (`passages`), plus a coverage grade (`term_coverage`/`uncovered`) and a `trace`.
@@ -45,10 +48,10 @@ For AI agents: [docs/agentic-setup.en.md](docs/agentic-setup.en.md) — installa
 
 ```
 LLM-Wikitila/
-├── wikitila.py                # Main tool: build · search · coverage · status · manifest · check · eval · embed
+├── wikitila.py                # Main tool: build · search · coverage · status · manifest · check · lint · eval · embed
 ├── wikitila_graph.py          # Optional: local Graphify extraction (Ollama, no thinking)
 ├── validate_catalog.py        # Validation against a question catalog (3 measurement levels)
-├── test_wikitila.py           # 39 unit tests (synthetic corpus, no network/Ollama)
+├── test_wikitila.py           # 49 unit tests (synthetic corpus, no network/Ollama)
 ├── install.sh                 # Installer for a target folder
 ├── config.example.toml        # Example configuration (→ wikitila.toml)
 ├── authority_register.example.json  # Template for the authority register

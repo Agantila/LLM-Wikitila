@@ -43,8 +43,11 @@ Begründung: [ADR-001](pm/adr/ADR-001-verbindliche-designentscheidungen.md) und 
 ```bash
 python3 -m unittest test_wikitila                     # alle grün
 python3 wikitila.py --root examples/demo-corpus build
-python3 validate_catalog.py --root examples/demo-corpus --catalog golden_catalog.example.jsonl   # R@10 1.00
+python3 validate_catalog.py --root examples/demo-corpus --catalog golden_catalog.example.jsonl --gate   # R@10 1.00, Exit 0
+python3 wikitila.py --root examples/demo-corpus lint --all            # Demo-Korpus ohne Verstoß
 ```
+
+Auf Rechnern, deren `python3` älter als 3.11 ist oder kein sqlite3 hat, die Gates mit einem passenden Interpreter ausführen (z. B. `/usr/bin/python3`); maßgeblich ist die Zeile `Ran N tests … OK`.
 
 Die CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) führt dasselbe auf Python 3.11 bis 3.13 aus.
 
@@ -75,6 +78,8 @@ type: decision | learning | pitfall | reference
 - Commits: `typ(bereich): kurz` (z. B. `fix(search): …`, `docs: …`, `pm: …`). Arbeit auf einem Branch, Merge per Pull Request.
 - Versionen nach SemVer. Die Version steht in `wikitila.py` (`__version__`) und in `CHANGELOG.md`.
 - Fehler für Nutzer: `WikitilaError` mit verständlicher Meldung (Exit-Code 2), kein Traceback.
+- Wer ändert, was `build` aus einer unveränderten Datei erzeugt (`parse_doc`, `chunk_text`, Felder in `files`/`t`), erhöht `INDEX_FORMAT` in `wikitila.py` ([ADR-006](pm/adr/ADR-006-indexformat-version.md)).
+- Neue Konfigurationsschlüssel immer in `DEFAULTS` und `config.example.toml` eintragen — `check_cfg` prüft Typen gegen `DEFAULTS` und warnt bei Unbekanntem.
 
 ## 7. Wichtige Dateien
 

@@ -28,19 +28,33 @@ Arbeite in dieser Reihenfolge und FRAGE bei jedem offenen Punkt nach, bevor du s
    - Welche Fakten sind zeitabhängig (stale_after / Review-Termin)?
    → authority_register.json befüllen. NUR der menschliche Owner setzt authority_confirmed: true.
 
-4. INDEX & PRÜFUNG
+4. SCHREIB-VERTRAG (Suchqualität entsteht beim Schreiben)
+   - Frontmatter-Minimalprofil für neue Dateien: Pflicht `title` und `description`
+     als flache Zeilen (`description` in Anführungszeichen — ein unquotierter
+     Doppelpunkt bricht strikte YAML-Parser), empfohlen `type`, `status`, `tags`.
+     Der Index liest aus dem Frontmatter nur title/description/status/superseded_by.
+   - Die Konvention in den Eintrittsdateien des Ordners verankern
+     (AGENTS.md/CLAUDE.md, nur mit Owner-Freigabe): Ohne diesen Verweis sehen
+     Agenten die Pflicht nicht, und neue Dateien entstehen schemafrei.
+   - Prüfung einrichten: wikitila.py lint <datei> bei jeder neuen Datei,
+     wikitila.py lint --all als wiederkehrender Soll-Ist-Report
+     (Pflichtfelder, Ausnahmen und Geltungsbeginn in wikitila.toml, [lint]).
+   - Abnahme: mindestens ein Katalogfall, dessen Antwort nur über description
+     oder status erreichbar ist.
+
+5. INDEX & PRÜFUNG
    - wikitila.py --root <ordner> build
    - wikitila.py --root <ordner> manifest   (Coverage: was ist ausgeschlossen und warum)
    - wikitila.py --root <ordner> check      (Drift 0)
    - .wikitila/ in .gitignore aufnehmen.
 
-5. ABNAHME
+6. ABNAHME
    - Fragenkatalog (JSONL, ~50 Fälle: positiv/authority/coverage/negativ) mit dem Owner anlegen.
    - python3 validate_catalog.py --root . --catalog <katalog>
      Ziele: R@10 ≥ 0,95 · MRR ≥ 0,80 · Passagen-Präsenz hoch · Coverage-Note < 1,0 auf Negativ-Fällen.
    - Verfehlte Fälle analysieren (Register, Scope, Überschriften) und nachziehen.
 
-6. GRAPH (optional, nie als Belegquelle)
+7. GRAPH (optional, nie als Belegquelle)
    - Nur auf ausdrückliche Freigabe; Dauer vorher nennen (≈0,3 Dokumente/s).
    - wikitila_graph.py run --model maternion/ling-3.0-tiny:8b --workers 2, danach build.
 
@@ -82,7 +96,18 @@ SCHRITT 3 — REFERENZEN NACHZIEHEN:
 - MASTER.md/Übersicht, Setup- und Betriebsdoku, Skill-Dateien prüfen; tote Pfade ersetzen.
 - AGENTS.md/CLAUDE.md nur mit Freigabe ändern.
 
-SCHRITT 4 — ABNAHME:
+SCHRITT 4 — SCHREIB-VERTRAG:
+- Frontmatter-Minimalprofil wie im Setup-Prompt: Pflicht `title`/`description`
+  als flache Zeilen, `description` in Anführungszeichen (Doppelpunkt-Falle).
+  Der Index liest nur title/description/status/superseded_by.
+- Die Konvention in AGENTS.md/CLAUDE.md verankern (mit Freigabe) — sonst sehen
+  Agenten die Pflicht nicht und neue Dateien entstehen schemafrei.
+- wikitila.py lint --all als Soll-Ist-Report über den Bestand ausführen;
+  Verstöße priorisiert nachziehen (Pflichtfelder/Ausnahmen in wikitila.toml, [lint]).
+- Abnahme-Katalog um einen Fall ergänzen, dessen Antwort nur über description
+  oder status erreichbar ist.
+
+SCHRITT 5 — ABNAHME:
 - Fragenkatalog (JSONL, ~50 Fälle) übernehmen oder anlegen.
 - python3 validate_catalog.py --root . --catalog <katalog>
   Ziele: R@10 ≥ 0,95 · MRR ≥ 0,80 · Passagen-Präsenz hoch · Coverage-Note < 1,0 auf Negativ-Fällen.
@@ -137,7 +162,7 @@ Antwortfelder: `results` (Datei, `heading`, `passages` = Originalpassagen, `scor
 ## 5. Validierung
 
 - Fragenkatalog (JSONL, Schema: `docs/validation.de.md`) anlegen und mit `python3 validate_catalog.py --root . --catalog <katalog>` messen (Datei-Recall, Passagen-Präsenz, Coverage/Negativ).
-- Referenzwerte: R@10 1,00 · MRR 0,785 · Passagen 45 % · Abstention-Signal 8/8 · 18/18 Tests zum Messzeitpunkt (aktuell 39/39). MRR liegt unter dem Ziel 0,80 (Backlog B-010).
+- Referenzwerte: R@10 1,00 · MRR 0,785 · Passagen 45 % · Abstention-Signal 8/8 · 18/18 Tests zum Messzeitpunkt (aktuell 79/79). MRR liegt unter dem Ziel 0,80 (Backlog B-010).
 - Datei-Recall ist **kein** Nachweis für Antwortqualität.
 
 ## 6. Wissensgraph (optional)

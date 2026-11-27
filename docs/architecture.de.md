@@ -18,7 +18,10 @@ LLM-Wikitila ist ein **lokaler, evidenzorientierter Hybrid**: deterministische V
 | **Antwort-Tor** | vier Antwortstatus + Abstention-Signale | modellfrei, deterministisch |
 | **Source-Manifest** | Coverage-Report | `manifest` → `.wikitila/source_manifest.json` |
 | **Index-/Quellstand-Abgleich** | Drift erkennen | `check` (neu/geändert/entfernt) |
+| **Schreibseite** | Frontmatter-Konvention neuer Dateien | `lint` (Pflichtfelder aus `[lint]` in wikitila.toml, zweistufig Verstoß/Hinweis, gleiche Lesesicht wie der Index) |
 | **Wissensgraph** (optional) | Navigation, Querbezüge, Lint-Kandidaten | Graphify + kleines lokales Modell, ohne Thinking |
+
+Aus dem Frontmatter liest der Index nur `title`, `description`, `status` und `superseded_by` — als flache `schluessel: wert`-Zeilen (keine Listen, keine Verschachtelung). `tags`, `type` und weitere Felder bleiben für die Suche wirkungslos (sie wirken z. B. in Obsidian). `lint` prüft genau diese Lesesicht: Pflichtfelder (`require`) werden mit derselben Parser-Logik gelesen wie beim Build, damit „lint-konform = index-optimal" gilt.
 
 ## Datenfluss
 

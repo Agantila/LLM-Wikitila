@@ -1,6 +1,7 @@
 {"q":"Welche Farbe ist die Akzentfarbe der Marke?","type":"paraphrase","kind":"positiv","expect":["doku/brand_tokens.md"],"passage":["#00DBDA"],"answer":"belegt"}
-{"q":"Wie hoch ist der aktuelle Preis?","type":"aktueller-stand","kind":"authority","expect":["doku/preise_aktuell.md"],"passage":["549"],"answer":"belegt"}
-{"q":"Wie hieß der Preis vor der Erhöhung?","type":"aktueller-stand","kind":"authority","expect":["doku/preise_alt.md","doku/preise_aktuell.md"],"passage":["499"],"answer":"belegt"}
+{"q":"Wie hoch ist der aktuelle Preis?","type":"aktueller-stand","kind":"authority","expect":["doku/preise_aktuell.md"],"passage":["549"],"answer":"widersprüchlich"}
+{"q":"Wie hieß der Preis vor der Erhöhung?","type":"aktueller-stand","kind":"authority","expect":["doku/preise_alt.md","doku/preise_aktuell.md"],"passage":["499"],"answer":"widersprüchlich"}
 {"q":"Welche Auflösung nutzt die Anzeige?","type":"stichwort","kind":"positiv","expect":["doku/anzeigen_specs.md"],"passage":["1080 × 1920"],"answer":"belegt"}
 {"q":"Welche Safe Zones gelten für Pinterest Anzeigen?","type":"stichwort","kind":"negativ","expect":[],"passage":[],"answer":"nicht_belegt"}
 {"q":"Was kostet das Produkt in Zimbabwe?","type":"stichwort","kind":"negativ","expect":[],"passage":[],"answer":"nicht_belegt"}
+{"q":"Welche Datei regelt den Kampagnenbetrieb?","type":"frontmatter","kind":"positiv","expect":["doku/anzeigen_specs.md"],"answer":"belegt","note":"Antwort nur über description erreichbar (B-022)"}

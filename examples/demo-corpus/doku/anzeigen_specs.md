@@ -1,3 +1,8 @@
+---
+title: Anzeigen-Spezifikation
+description: "Verbindliche Vorgaben für Hochformat-Anzeigen im Kampagnenbetrieb."
+status: stable
+---
 # Anzeigen-Spezifikation
 
 ## Format

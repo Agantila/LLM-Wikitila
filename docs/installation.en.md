@@ -21,7 +21,7 @@
 ./install.sh /path/to/project-folder
 ```
 
-The installer is idempotent: it checks Python ≥ 3.11, creates `wikitila.toml` and `authority_register.json` if missing, builds the index, and runs the index/source consistency check.
+The installer is idempotent: it checks Python ≥ 3.11 with sqlite3/FTS5, creates `wikitila.toml` and an **empty** `authority_register.json` if missing (entry layout: `authority_register.example.json`), builds the index, and runs the index/source consistency check. If `python3` is too old or lacks sqlite3, set the interpreter: `PYTHON=/usr/bin/python3 ./install.sh …` (also applies to the `./wikitila` wrapper).
 
 **Step 3 — Define exclusions.** Create `.graphifyignore` in the target folder (gitignore-like patterns, e.g. `Archive/`, `*Template_*.md`). The same file applies to search and graph.
 
@@ -50,7 +50,7 @@ python3 wikitila.py --root . status      # Index state
 python3 wikitila.py --root . manifest    # Coverage report (scope, exclusions)
 python3 wikitila.py --root . check       # Index/source consistency (no drift?)
 python3 wikitila.py --root . coverage "question"  # answer coverage up-front (coverage grade)
-python3 -m unittest test_wikitila        # self-tests (39)
+python3 -m unittest test_wikitila        # self-tests (79)
 ```
 
 ## Troubleshooting

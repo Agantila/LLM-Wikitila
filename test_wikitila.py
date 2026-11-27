@@ -430,5 +430,377 @@ class T(unittest.TestCase):
         self.assertEqual(r[0]["path"], "06_Marketing/Schrift.md")
 
 
+class TestLint(unittest.TestCase):
+    """Schreibseite (Plan 2026-11-27, B-020): lint prüft Frontmatter mit derselben
+    Sicht wie der Index (parse_doc), zweistufig Verstoss/Hinweis."""
+
+    def setUp(self):
+        self.d = tempfile.TemporaryDirectory()
+        self.root = Path(self.d.name)
+        make(self.root, {
+            "konform.md": "---\ntitle: Preise\ndescription: \"Aktuelle Preise.\"\nstatus: draft\n---\n# Preise\n\nText.\n",
+            "ohne_fm.md": "# Ohne Frontmatter\n\nText.\n",
+            "ohne_description.md": "---\ntitle: Nur Titel\n---\n# Titel\n\nText.\n",
+            "doppelpunkt.md": "---\ntitle: Runbook\ndescription: Anleitung für Produktionen: Schritt eins\n---\n# Runbook\n\nText.\n",
+            "status_frei.md": "---\ntitle: Entscheid\ndescription: \"Beschluss.\"\nstatus: accepted\n---\n# X\n\nText.\n",
+            "copy_social.md": "# Copy\n\nText ohne Frontmatter.\n",
+        })
+        self.cfg = W.load_cfg(self.root)
+
+    def tearDown(self):
+        self.d.cleanup()
+
+    def test_konform(self):
+        errors, notes = W.lint_text((self.root / "konform.md").read_text(encoding="utf-8"), self.cfg)
+        self.assertEqual(errors, [])
+        self.assertEqual(notes, [])
+
+    def test_kein_frontmatter_ist_verstoss(self):
+        errors, _ = W.lint_text((self.root / "ohne_fm.md").read_text(encoding="utf-8"), self.cfg)
+        self.assertTrue(any("kein Frontmatter" in e for e in errors))
+
+    def test_fehlendes_pflichtfeld_ist_verstoss(self):
+        errors, _ = W.lint_text((self.root / "ohne_description.md").read_text(encoding="utf-8"), self.cfg)
+        self.assertTrue(any("'description'" in e for e in errors))
+
+    def test_unquotierter_doppelpunkt_ist_hinweis_kein_verstoss(self):
+        errors, notes = W.lint_text((self.root / "doppelpunkt.md").read_text(encoding="utf-8"), self.cfg)
+        self.assertEqual(errors, [])  # der Index liest die Felder zeilenweise weiter
+        self.assertTrue(any("Doppelpunkt" in n for n in notes))
+
+    def test_status_ausserhalb_konvention_ist_hinweis(self):
+        errors, notes = W.lint_text((self.root / "status_frei.md").read_text(encoding="utf-8"), self.cfg)
+        self.assertEqual(errors, [])
+        self.assertTrue(any("status" in n for n in notes))
+
+    def test_exclude_muster_greift_auf_dateinamen(self):
+        self.assertTrue(W.lint_excluded("06_Marketing/copy_social.md", self.cfg["lint"]["exclude"]))
+        self.assertTrue(W.lint_excluded("x/README.md", self.cfg["lint"]["exclude"]))
+        self.assertFalse(W.lint_excluded("06_Marketing/konform.md", self.cfg["lint"]["exclude"]))
+
+    def test_require_aus_config_ueberschreibt_default(self):
+        (self.root / "wikitila.toml").write_text('[lint]\nrequire = ["title"]\n', encoding="utf-8")
+        cfg = W.load_cfg(self.root)
+        errors, _ = W.lint_text((self.root / "ohne_description.md").read_text(encoding="utf-8"), cfg)
+        self.assertEqual(errors, [])  # description ist hier nicht mehr Pflicht
+
+    def run_lint(self, cfg=None, **kw):
+        """cmd_lint mit --json ausführen; liefert (Verstöße?, JSON-Ergebnis), Ausgabe abgefangen."""
+        import argparse, contextlib, io
+        a = argparse.Namespace(**{"all": False, "json": True, "path": None, **kw})
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = W.cmd_lint(self.root, cfg or self.cfg, a)
+        return rc, json.loads(buf.getvalue())
+
+    def test_cmd_lint_all_zaehlt_und_filtert(self):
+        rc, out = self.run_lint(all=True)
+        self.assertTrue(rc)  # ohne_fm.md und ohne_description.md haben Verstösse
+        pfade = {f["path"] for f in out["files"] if f["errors"]}
+        self.assertEqual(pfade, {"ohne_fm.md", "ohne_description.md"})
+        self.assertEqual(out["excluded"], 1)  # copy_social.md
+        self.assertEqual(out["checked"], 5)
+
+    def test_cmd_lint_since_laesst_alte_dateien_aussen_vor(self):
+        os.utime(self.root / "ohne_fm.md", (1_000_000_000, 1_000_000_000))  # mtime 2001
+        (self.root / "wikitila.toml").write_text('[lint]\nsince = "2026-01-01"\n', encoding="utf-8")
+        _, out = self.run_lint(cfg=W.load_cfg(self.root), all=True)
+        pfade = {f["path"] for f in out["files"] if f["errors"]}
+        self.assertEqual(pfade, {"ohne_description.md"})
+        self.assertEqual(out["excluded"], 2)  # copy_social.md + ohne_fm.md (zu alt)
+
+    def test_cmd_lint_since_ungueltig_ist_bedienfehler(self):
+        (self.root / "wikitila.toml").write_text('[lint]\nsince = "27.11.2026"\n', encoding="utf-8")
+        with self.assertRaises(W.WikitilaError):
+            self.run_lint(cfg=W.load_cfg(self.root), all=True)
+
+    def test_cmd_lint_all_ignoriert_txt(self):
+        (self.root / "notizen.txt").write_text("Freitext ohne Frontmatter.\n", encoding="utf-8")
+        _, out = self.run_lint(all=True)
+        self.assertNotIn("notizen.txt", {f["path"] for f in out["files"]})
+        self.assertEqual(out["checked"], 5)
+
+    def test_exclude_ohne_gross_klein(self):
+        self.assertTrue(W.lint_excluded("pm/adr/TEMPLATE.md", self.cfg["lint"]["exclude"]))
+        self.assertTrue(W.lint_excluded("x/OKF_FRONTMATTER_TEMPLATE.md", self.cfg["lint"]["exclude"]))
+
+    def test_frontmatter_nicht_abgeschlossen(self):
+        errors, _ = W.lint_text("---\ntitle: X\ndescription: \"Y\"\n# Kein Ende\n", self.cfg)
+        self.assertTrue(any("nicht abgeschlossen" in e for e in errors))
+
+    def test_cmd_lint_einzeldatei_exit_semantik(self):
+        self.assertFalse(self.run_lint(path="konform.md")[0])
+        self.assertTrue(self.run_lint(path="ohne_fm.md")[0])
+
+    def test_cmd_lint_einzeldatei_absoluter_pfad(self):
+        rc, out = self.run_lint(path=str(self.root / "ohne_fm.md"))
+        self.assertTrue(rc)
+        self.assertEqual(out["path"], "ohne_fm.md")
+
+    def test_cmd_lint_einzeldatei_ausgenommen_ist_ok(self):
+        rc, out = self.run_lint(path="copy_social.md")  # Hook auf ausgenommene Datei: Exit 0
+        self.assertFalse(rc)
+        self.assertTrue(out["excluded"])
+
+    def test_cmd_lint_einzeldatei_ausserhalb_ist_bedienfehler(self):
+        with tempfile.TemporaryDirectory() as fremd:
+            f = Path(fremd) / "x.md"
+            f.write_text("# X\n", encoding="utf-8")
+            with self.assertRaises(W.WikitilaError):
+                self.run_lint(path=str(f))
+            with self.assertRaises(W.WikitilaError):
+                self.run_lint(path=os.path.relpath(f, self.root))
+
+
+HERE = Path(__file__).resolve().parent
+
+
+def cli(*args, env=None):
+    """wikitila.py als Subprozess (Exit-Codes und Fehlermeldungen wie beim Nutzer)."""
+    e = {k: v for k, v in os.environ.items() if k not in ("WIKITILA_CONFIG", "WIKITILA_ROOT")}
+    e.update(env or {})
+    return subprocess.run([sys.executable, str(HERE / "wikitila.py"), *args], capture_output=True, text=True, env=e)
+
+
+class TestHaertung(unittest.TestCase):
+    """Produktionsreife (Plan 2026-11-27-produktionsreife): Indexformat, Konfiguration,
+    Frontmatter-Randfälle, eval, Fehlerpfade der CLI, Katalog-Gate."""
+
+    def setUp(self):
+        self.d = tempfile.TemporaryDirectory()
+        self.root = Path(self.d.name)
+        make(self.root, CORPUS)
+        self.cfg = W.load_cfg(self.root)
+
+    def tearDown(self):
+        self.d.cleanup()
+
+    def quiet(self, fn, *args):
+        import contextlib, io
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            rc = fn(*args)
+        return rc, out.getvalue(), err.getvalue()
+
+    def toml(self, text):
+        (self.root / "wikitila.toml").write_text(text, encoding="utf-8")
+
+    # ---------- P1 Indexformat (ADR-006) ----------
+    def test_formatwechsel_erzwingt_vollneubau(self):
+        self.quiet(W.cmd_build, self.root, self.cfg)
+        with contextlib_closing(W.connect(self.root, self.cfg)) as c:
+            self.assertEqual(W.index_format(c), W.INDEX_FORMAT)
+            # Index eines älteren Formats simulieren: Verarbeitung anders, Hash gleich
+            c.execute("update files set title='ALT' where path='01_Strategie/Preise_neu.md'")
+            c.execute("update meta set v='1' where k='format'")
+            c.commit()
+        _, out, err = self.quiet(W.cmd_build, self.root, self.cfg)
+        self.assertIn("Vollneubau", err)
+        self.assertIn("5 neu/geändert", out)
+        with contextlib_closing(W.connect(self.root, self.cfg)) as c:
+            title = c.execute("select title from files where path='01_Strategie/Preise_neu.md'").fetchone()[0]
+            self.assertEqual(title, "Preise neu")
+            self.assertEqual(W.index_format(c), W.INDEX_FORMAT)
+        _, out, err = self.quiet(W.cmd_build, self.root, self.cfg)   # danach wieder inkrementell
+        self.assertIn("0 neu/geändert", out)
+        self.assertNotIn("Vollneubau", err)
+
+    def test_check_meldet_veraltetes_format_als_drift(self):
+        self.quiet(W.cmd_build, self.root, self.cfg)
+        import argparse
+        self.assertFalse(self.quiet(W.cmd_check, self.root, self.cfg, argparse.Namespace())[0])
+        with contextlib_closing(W.connect(self.root, self.cfg)) as c:
+            c.execute("delete from meta where k='format'"); c.commit()
+        drift, out, _ = self.quiet(W.cmd_check, self.root, self.cfg, argparse.Namespace())
+        self.assertTrue(drift)
+        self.assertIn("Indexformat veraltet", out)
+
+    # ---------- P2 Konfiguration ----------
+    def test_config_falscher_typ_ist_bedienfehler(self):
+        for text in ('[lint]\nrequire = "title"\n', 'lint = 5\n', '[index]\nmax_chunk_chars = 0\n',
+                     '[rank]\nrrf_k = "60"\n', '[privacy]\nmask_secrets = 1\n', '[index]\nmax_chunk_chars = -5\n'):
+            with self.subTest(text=text):
+                self.toml(text)
+                with self.assertRaises(W.WikitilaError):
+                    W.load_cfg(self.root)
+
+    def test_config_unbekanntes_nur_warnung(self):
+        self.toml('[lnit]\nrequire = ["title"]\n[rank]\nrrf = 5\nrrf_k = 50\n')
+        import contextlib, io
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            cfg = W.load_cfg(self.root)
+        self.assertEqual(cfg["rank"]["rrf_k"], 50)
+        self.assertIn("[lnit]", err.getvalue())
+        self.assertIn("rank.rrf", err.getvalue())
+
+    def test_config_float_akzeptiert_ganze_zahl(self):
+        self.toml('[rank]\nsuperseded_factor = 1\n')
+        self.assertEqual(W.load_cfg(self.root)["rank"]["superseded_factor"], 1)
+
+    def test_config_beispiel_ist_gueltig(self):
+        import contextlib, io, shutil
+        shutil.copy(HERE / "config.example.toml", self.root / "wikitila.toml")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            W.load_cfg(self.root)
+        self.assertEqual(err.getvalue(), "")
+
+    def test_wikitila_config_auf_fehlende_datei(self):
+        r = cli("--root", str(self.root), "status", env={"WIKITILA_CONFIG": str(self.root / "fehlt.toml")})
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("WIKITILA_CONFIG", r.stderr)
+
+    # ---------- P5 Frontmatter ----------
+    def test_frontmatter_bom(self):
+        fm, body = W.parse_doc("﻿---\ntitle: Mit BOM\n---\n# Kopf\n\nText.\n")
+        self.assertEqual(fm["title"], "Mit BOM")
+        self.assertTrue(body.startswith("# Kopf"))
+        fm, body = W.parse_doc("﻿# Ohne Frontmatter\n")
+        self.assertEqual(fm, {})
+        self.assertTrue(body.startswith("# Ohne"))
+
+    def test_frontmatter_am_dateiende_und_leer(self):
+        self.assertEqual(W.parse_doc("---\ntitle: Nur Kopf\n---")[0]["title"], "Nur Kopf")
+        fm, body = W.parse_doc("---\n---\n# Titel\n\nText\n\n---\n\nNach der Linie.\n")
+        self.assertEqual(fm, {})
+        self.assertIn("Nach der Linie", body)   # leerer Block verschluckt den Text nicht bis zur nächsten Linie
+        self.assertTrue(body.startswith("# Titel"))
+
+    def test_frontmatter_schluessel_mit_bindestrich_und_ziffern(self):
+        fm, _ = W.parse_doc("---\ncreated-at: 2026-11-27\nokf2: ja\n---\n# T\n")
+        self.assertEqual(fm["created-at"], "2026-11-27")
+        self.assertEqual(fm["okf2"], "ja")
+        errors, notes = W.lint_text("---\ntitle: T\ndescription: \"D\"\ncreated-at: 2026-11-27\n---\n# T\n", self.cfg)
+        self.assertEqual((errors, notes), ([], []))
+
+    def test_lint_bom_datei_konform(self):
+        errors, _ = W.lint_text("﻿---\ntitle: T\ndescription: \"D\"\n---\n# T\n", self.cfg)
+        self.assertEqual(errors, [])
+
+    def test_bom_titel_im_index(self):
+        (self.root / "bom.md").write_text("﻿# Bomtitel\n\nEin Absatz über das Kürbisfeld im Herbst.\n", encoding="utf-8")
+        self.quiet(W.cmd_build, self.root, self.cfg)
+        with contextlib_closing(W.connect(self.root, self.cfg)) as c:
+            self.assertEqual(c.execute("select title from files where path='bom.md'").fetchone()[0], "Bomtitel")
+
+    # ---------- P4 eval ----------
+    def test_eval_ueberspringt_negativfaelle(self):
+        import argparse
+        self.quiet(W.cmd_build, self.root, self.cfg)
+        g = self.root / "gold.jsonl"
+        g.write_text('{"q":"Was kostet der Starter?","expect":["01_Strategie/Preise_neu.md"]}\n'
+                     '{"q":"Wetter in Zimbabwe","expect":[]}\n', encoding="utf-8")
+        _, out, _ = self.quiet(W.cmd_eval, self.root, self.cfg, argparse.Namespace(golden=str(g), variants=False, misses=False))
+        self.assertIn("R@10 1.00", out)
+        self.assertIn("n=1, 1 ohne expect übersprungen", out)
+
+    def test_eval_kaputtes_golden_set(self):
+        import argparse
+        self.quiet(W.cmd_build, self.root, self.cfg)
+        g = self.root / "gold.jsonl"
+        for text, msg in (('{"q":"a","expect":["x"]}\n{kaputt\n', ":2:"), ('{"q":"a"}\n', "expect"),
+                          ('{"q":"a","expect":[]}\n', "keine Fälle mit erwarteter Datei")):
+            with self.subTest(text=text):
+                g.write_text(text, encoding="utf-8")
+                with self.assertRaises(W.WikitilaError) as cm:
+                    W.cmd_eval(self.root, self.cfg, argparse.Namespace(golden=str(g), variants=False, misses=False))
+                self.assertIn(msg, str(cm.exception))
+        with self.assertRaises(W.WikitilaError):
+            W.load_jsonl(str(self.root / "fehlt.jsonl"), {"q": str})
+
+    def test_perzentil_nearest_rank(self):
+        self.assertEqual(W.pct(list(range(1, 11)), 0.95), 10)
+        self.assertEqual(W.pct(list(range(1, 11)), 0.5), 5)
+        self.assertEqual(W.pct([7], 0.95), 7)
+        self.assertEqual(W.pct([], 0.95), 0.0)
+
+    # ---------- P9 status ----------
+    def test_status_meldet_register_pfade_ohne_index(self):
+        (self.root / "authority_register.json").write_text(json.dumps({"entries": [
+            {"canonical": "01_Strategie/Preise_neu.md", "supersedes": ["01_Strategie/Tippfehler.md"]}]}), encoding="utf-8")
+        cfg = W.load_cfg(self.root)
+        self.quiet(W.cmd_build, self.root, cfg)
+        _, out, _ = self.quiet(W.cmd_status, self.root, cfg)
+        self.assertIn("Register-Pfad nicht im Index", out)
+        self.assertIn("Tippfehler.md", out)
+        self.assertNotIn("Preise_neu.md (", out)
+
+    # ---------- P3/P10 CLI-Fehlerpfade ----------
+    def test_cli_k_muss_positiv_sein(self):
+        self.quiet(W.cmd_build, self.root, self.cfg)
+        for k in ("0", "-3", "zwei"):
+            r = cli("--root", str(self.root), "search", "Preise", "-k", k)
+            self.assertEqual(r.returncode, 2, k)
+            self.assertNotIn("Traceback", r.stderr)
+
+    def test_cli_root_fehlt(self):
+        r = cli("--root", str(self.root / "gibt_es_nicht"), "build")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("Ordner nicht gefunden", r.stderr)
+        self.assertFalse((self.root / "gibt_es_nicht").exists())   # build legt keinen Phantom-Ordner an
+
+    def test_cli_kaputter_index_ohne_traceback(self):
+        db = self.root / ".wikitila" / "index.db"
+        db.parent.mkdir(parents=True)
+        db.write_bytes(b"kein SQLite " * 200)
+        r = cli("--root", str(self.root), "status")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("SQLite", r.stderr)
+        self.assertIn(".wikitila/", r.stderr)   # Hinweis: Index löschen und neu bauen
+        self.assertNotIn("Traceback", r.stderr)
+
+    def test_cli_embed_ohne_dienst_ohne_traceback(self):
+        self.toml('[embedding]\nurl = "http://127.0.0.1:9"\n')
+        self.assertEqual(cli("--root", str(self.root), "build").returncode, 0)
+        r = cli("--root", str(self.root), "embed")
+        self.assertEqual(r.returncode, 2)   # numpy fehlt (CI) oder Dienst nicht erreichbar
+        self.assertIn("FEHLER", r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+
+    def test_cli_kaputte_konfiguration(self):
+        self.toml('[lint]\nrequire = "title"\n')
+        r = cli("--root", str(self.root), "lint", "--all")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("lint.require", r.stderr)
+
+    # ---------- P6/P7 Demo-Korpus und Katalog-Gate ----------
+    def demo(self):
+        import shutil
+        root = self.root / "demo"
+        shutil.copytree(HERE / "examples/demo-corpus", root, ignore=shutil.ignore_patterns(".wikitila"))
+        return root
+
+    def test_demo_korpus_ist_lint_konform(self):
+        import argparse
+        root = self.demo()
+        rc, out, _ = self.quiet(W.cmd_lint, root, W.load_cfg(root), argparse.Namespace(all=True, json=True, path=None))
+        self.assertFalse(rc, out)
+        self.assertEqual(json.loads(out)["notes"], 0)
+
+    def test_validate_catalog_gate(self):
+        root = self.demo()
+        self.assertEqual(cli("--root", str(root), "build").returncode, 0)
+        vc = [sys.executable, str(HERE / "validate_catalog.py"), "--root", str(root), "--gate", "--catalog"]
+        r = subprocess.run(vc + [str(HERE / "golden_catalog.example.jsonl")], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("GATE: bestanden", r.stdout)
+        bad = self.root / "bad.jsonl"
+        bad.write_text('{"q":"Welche Farbe ist die Akzentfarbe der Marke?","kind":"positiv","expect":["doku/fehlt.md"]}\n',
+                       encoding="utf-8")
+        r = subprocess.run(vc + [str(bad)], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("GATE: nicht bestanden", r.stdout)
+        bad.write_text('{"q":"x","kind":"unbekannt","expect":[]}\n', encoding="utf-8")
+        r = subprocess.run(vc + [str(bad)], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 2)
+        self.assertNotIn("Traceback", r.stderr)
+
+
+def contextlib_closing(c):
+    import contextlib
+    return contextlib.closing(c)
+
+
 if __name__ == "__main__":
     unittest.main()

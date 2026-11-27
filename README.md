@@ -32,6 +32,9 @@ python3 wikitila.py --root /pfad/zum/projekt-ordner search "Wie hoch ist der Pre
 # 3. Coverage und Aktualität prüfen
 python3 wikitila.py --root /pfad/zum/projekt-ordner manifest
 python3 wikitila.py --root /pfad/zum/projekt-ordner check
+
+# 4. Schreibseite prüfen (Frontmatter-Konvention neuer Dateien)
+python3 wikitila.py --root /pfad/zum/projekt-ordner lint --all
 ```
 
 Jede Antwort trägt `answer_status` (`belegt` · `widersprüchlich` · `belegt_gueltigkeit_unbestaetigt` · `nicht_belegt`), Flags wie `kanonisch` / `überholt durch` / `veraltet`, die Originalpassagen (`passages`) sowie eine Coverage-Note (`term_coverage`/`uncovered`) und einen `trace`.
@@ -45,10 +48,10 @@ Für KI-Agenten: [docs/agentic-setup.de.md](docs/agentic-setup.de.md) — Instal
 
 ```
 LLM-Wikitila/
-├── wikitila.py                # Hauptwerkzeug: build · search · coverage · status · manifest · check · eval · embed
+├── wikitila.py                # Hauptwerkzeug: build · search · coverage · status · manifest · check · lint · eval · embed
 ├── wikitila_graph.py          # optional: lokale Graphify-Extraktion (Ollama, ohne Thinking)
 ├── validate_catalog.py        # Validierung gegen einen Fragenkatalog (3 Messebenen)
-├── test_wikitila.py           # 39 Unit-Tests (synthetischer Korpus, ohne Netz/Ollama)
+├── test_wikitila.py           # 49 Unit-Tests (synthetischer Korpus, ohne Netz/Ollama)
 ├── install.sh                 # Installer für einen Ziel-Ordner
 ├── config.example.toml        # Beispielkonfiguration (→ wikitila.toml)
 ├── authority_register.example.json  # Vorlage für das Authority-Register

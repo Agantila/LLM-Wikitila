@@ -69,9 +69,10 @@ def docid(rel: str) -> str:
 
 
 def read_doc(path: Path) -> tuple[str, str]:
-    t = path.read_text(encoding="utf-8", errors="ignore")
+    t = path.read_text(encoding="utf-8", errors="ignore").removeprefix("\ufeff")
     if t.startswith("---"):
-        m = re.match(r"---\n.*?\n---\n", t, re.S)
+        # gleiche Frontmatter-Erkennung wie wikitila.FM_RE (leerer Block, Block am Dateiende)
+        m = re.match(r"---[ \t]*\n(?:.*?\n)??---[ \t]*(?:\n|\Z)", t, re.S)
         if m:
             t = t[m.end():]
     title = path.stem
@@ -92,7 +93,8 @@ def chat(model: str, user: str, timeout: int = 240) -> tuple[dict, dict]:
         "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}],
     }
     req = urllib.request.Request(f"{OLLAMA}/api/chat", json.dumps(payload).encode(), {"Content-Type": "application/json"})
-    d = json.load(urllib.request.urlopen(req, timeout=timeout))
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        d = json.load(resp)
     return json.loads(d["message"]["content"]), d
 
 
@@ -164,7 +166,7 @@ def cmd_bench(a):
         ok = [r for r in rows if "err" not in r]
         if ok:
             print(f"{m:44s} ok {len(ok)}/{len(rows)}  {sum(r['s'] for r in ok)/len(ok):5.1f}s/Doku  "
-                  f"in {sum(r['in'] for r in ok)//len(ok)} out {sum(r['out'] for r in ok)//len(ok)} tok  "
+                  f"in {sum(r['in'] or 0 for r in ok)//len(ok)} out {sum(r['out'] or 0 for r in ok)//len(ok)} tok  "
                   f"Entitäten {sum(r['ents'] for r in ok)/len(ok):4.1f}  Relationen {sum(r['kept_rels'] for r in ok)/len(ok):4.1f}")
         out[m] = rows
     Path(a.out).write_text(json.dumps(out, ensure_ascii=False, indent=1))
@@ -179,9 +181,17 @@ def cmd_run(a):
     if a.limit:
         todo = todo[: a.limit]
     print(f"Dokumente {len(docs)}, im Cache {len(docs)-len(todo) if not a.limit else '?'}, offen {len(todo)}, Modell {a.model}, Worker {a.workers}", flush=True)
-    t0, done, fail = time.time(), 0, 0
+    t0 = time.time()
     (ROOT / "graphify-out").mkdir(exist_ok=True)
     log = open(ROOT / "graphify-out" / "wikitila_run.log", "a", encoding="utf-8")
+    try:
+        _run_pool(a, todo, log, t0)
+    finally:
+        log.close()
+
+
+def _run_pool(a, todo, log, t0):
+    done = fail = 0
 
     def work(p: Path):
         title, body = read_doc(p)
@@ -212,7 +222,8 @@ def cmd_run(a):
                 el = time.time() - t0
                 rate = (done + fail) / el
                 print(f"{done+fail}/{len(todo)}  fail {fail}  {rate:.2f} Dok/s  Rest ~{(len(todo)-done-fail)/max(rate,1e-6)/60:.0f} min", flush=True)
-    print(f"FERTIG {done} ok, {fail} fehlgeschlagen, {(time.time()-t0)/60:.1f} min", flush=True)
+    print(f"FERTIG {done} ok, {fail} fehlgeschlagen, {(time.time()-t0)/60:.1f} min"
+          + (" — Details in graphify-out/wikitila_run.log" if fail else ""), flush=True)
 
 
 def cmd_build(a):
@@ -301,8 +312,18 @@ def main():
     a = ap.parse_args()
     if a.root:
         ROOT = Path(a.root).resolve()
+    if not ROOT.is_dir():
+        sys.exit(f"FEHLER: Ordner nicht gefunden: {ROOT}")
     os.chdir(ROOT)
-    {"bench": cmd_bench, "run": cmd_run, "build": cmd_build}[a.cmd](a)
+    try:
+        {"bench": cmd_bench, "run": cmd_run, "build": cmd_build}[a.cmd](a)
+    except ImportError as e:
+        sys.exit(f"FEHLER: {e.name or e} fehlt. wikitila_graph.py braucht das Graphify-Paket (PyPI `graphifyy`) "
+                 "und networkx im aktuellen Python — siehe docs/installation.de.md.")
+    except urllib.error.URLError as e:
+        sys.exit(f"FEHLER: Ollama unter {OLLAMA} nicht erreichbar ({e.reason}). OLLAMA_URL prüfen.")
+    except KeyboardInterrupt:
+        sys.exit("Abgebrochen.")
 
 
 if __name__ == "__main__":

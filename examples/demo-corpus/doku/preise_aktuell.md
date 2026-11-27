@@ -1,3 +1,8 @@
+---
+title: Preise aktuell
+description: "Gültiger Preis des Starter-Pakets."
+status: stable
+---
 # Preise aktuell
 
 ## Starter-Paket
