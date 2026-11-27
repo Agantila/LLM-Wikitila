@@ -1,6 +1,6 @@
 # Status
 
-**Stand:** 2026-11-27 · **Version:** 0.3.0 getaggt; Unreleased (Kandidat 0.4.0) auf Branch `feat/production-hardening`, nicht committet · **Repo:** <https://github.com/Agantila/LLM-Wikitila>
+**Stand:** 2026-11-27 · **Version:** 0.3.0 getaggt; Unreleased (Kandidat 0.4.0) in PR #1 (`feat/production-hardening`), wartet auf Merge · **Repo:** <https://github.com/Agantila/LLM-Wikitila>
 
 **Einsatz:** Erster Produktiveinsatz im Referenz-Vault des Owners über einen Release-Worktree (siehe [Einsatz](#einsatz))
 
@@ -9,7 +9,7 @@
 | Gate | Wert |
 |---|---|
 | Unit-Tests | ✅ 79/79 (lokal Python 3.14.10) |
-| GitHub-CI | ⏳ läuft nach Push auf Python 3.11 bis 3.14 (Tests, Katalog-Gate, lint, Installer) |
+| GitHub-CI | ✅ PR #1 grün auf Python 3.11, 3.12, 3.13, 3.14 (Tests, Katalog-Gate, lint, Installer) |
 | Demo-Katalog (`examples/demo-corpus`) | ✅ R@10 1,00 · MRR 1,000 · `--gate` bestanden · `lint --all` 0 Verstöße |
 | Referenz-Vault (Owner-Messung 2026-11-15, v0.2.0, 1.459 Dateien) | R@10 1,00 ✅ · MRR 0,776 ⚠️ (Ziel 0,80) · Abstention-Signal 8/8 |
 | Build 10.000 Dateien (synthetisch) | ✅ 3,2 s (vorher 65,5 s) |
