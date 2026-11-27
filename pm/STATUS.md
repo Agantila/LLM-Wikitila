@@ -11,7 +11,8 @@
 | Unit-Tests | ✅ 79/79 (lokal Python 3.14.10) |
 | GitHub-CI | ✅ PR #1 grün auf Python 3.11, 3.12, 3.13, 3.14 (Tests, Katalog-Gate, lint, Installer) |
 | Demo-Katalog (`examples/demo-corpus`) | ✅ R@10 1,00 · MRR 1,000 · `--gate` bestanden · `lint --all` 0 Verstöße |
-| Referenz-Vault (Owner-Messung 2026-11-15, v0.2.0, 1.459 Dateien) | R@10 1,00 ✅ · MRR 0,776 ⚠️ (Ziel 0,80) · Abstention-Signal 8/8 |
+| Referenz-Vault (Messung 2026-11-27, v0.4.0 nach Vollneubau, 1.549 Dateien) | R@10 0,94 ⚠️ (2 Fehltreffer) · MRR 0,682 ⚠️ (Ziel 0,80) · Passagen Top-1 42 % · Abstention-Signal 8/8 · Antwortstatus 27/44 |
+| Referenz-Vault (Owner-Messung 2026-11-15, v0.2.0, 1.459 Dateien) | R@10 1,00 · MRR 0,776 · Abstention-Signal 8/8 |
 | Build 10.000 Dateien (synthetisch) | ✅ 3,2 s (vorher 65,5 s) |
 
 ## Zuletzt erledigt
@@ -29,8 +30,8 @@
 
 ## Offen / nächster Schritt
 
-1. 🟡 **Release 0.4.0 (Owner):** Branch `feat/production-hardening` committen, PR, Merge, `__version__` auf 0.4.0, Tag `v0.4.0`, Release-Worktree umstellen. Im Vault baut der erste `build` vollständig neu (ADR-006), danach Katalog messen (B-027) und den vault-seitigen Linter durch `lint --all` ersetzen.
-2. 🟡 **B-010/B-015/B-016:** Owner-Messung am Vault (MRR ≥ 0,80, Passagen-Präsenz, Coverage-Note auf den 8 Negativ-Fällen) steht aus — ADR-005: Antwort-Tor bleibt Signal-only.
+1. ⚠️ **B-010:** Im gewachsenen Referenz-Vault sind R@10 auf 0,94 und MRR auf 0,682 gefallen (2026-11-15: 1,00 / 0,776). Der Vollneubau änderte nichts — Ursache ist Ranking-Konkurrenz durch neue Dateien, nicht der Index. Die zwei Fehltreffer analysieren (Owner-Katalog, nur lokal).
+2. 🟡 **B-015/B-016:** Passagen-Präsenz 42 % (Top-1, volle Passagen), Coverage-Note < 1,0 auf 7/8 Negativfällen, Antwortstatus 27/44 — die Abweichungen der Antwortstatus-Ebene im Owner-Katalog prüfen (Katalogfehler wie im Beispielkatalog möglich, siehe Memory).
 3. ⏳ **B-011:** Link-Graph inkrementell bauen (inkrementeller Build bei 10.000 Dateien: 1,9 s, dominiert vom kompletten Link-Neuaufbau).
 4. ⏳ **B-013:** Release-Signierung (signierte Tags) prüfen. Actions sind bereits auf Commit-SHA gepinnt und werden per Dependabot aktualisiert.
 
@@ -38,9 +39,9 @@
 
 | Instanz | Werkzeug | Konfiguration | Stand |
 |---|---|---|---|
-| Referenz-Vault des Owners | Release-Worktree (`v0.2.0`), Aufruf über Wrapper-Skript | `wikitila.toml`, Register und privater Katalog im Vault | ✅ 2026-11-15, Abnahme R@10 1,00 |
+| Referenz-Vault des Owners | Release-Worktree (`v0.4.0`), Aufruf über Wrapper-Skript (`/usr/bin/python3`), nächtlicher systemd-Build | `wikitila.toml` inkl. `[lint]` (ersetzt den vault-eigenen OKF-Linter), Register und privater Katalog im Vault | ✅ 2026-11-27, Vollneubau, Katalog R@10 0,94 · MRR 0,682, `lint --all` im Tagesreport |
 
-Release-Wechsel: `git -C <release-worktree> checkout vX.Y.Z`, dann im Vault `build`, `check` und die Katalogmessung (macht der Owner).
+Release-Wechsel: `git -C <release-worktree> checkout vX.Y.Z`, dann im Vault `build`, `check` und die Katalogmessung (`validate_catalog.py --root <vault> --catalog <katalog>`).
 
 ## Risiken
 
