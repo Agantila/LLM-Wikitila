@@ -399,8 +399,12 @@ class T(unittest.TestCase):
                          "value": ["549/899/1.199"]}]}), encoding="utf-8")
         cfg = W.load_cfg(self.root)
         c = self.build()
-        top = W.search(c, cfg, "Preise Produktstufen Zielgruppen", 5)["results"][0]
-        self.assertEqual(top["path"], "06_Marketing/Preise_Kompakt.md")
+        res = W.search(c, cfg, "Preise Produktstufen Zielgruppen", 5)["results"]
+        # Absicht: der Register-Wert-Chunk steht in den Passagen der kanonischen Datei (B-015).
+        # Rang 1 ist hier nicht Gegenstand: im Mini-Korpus entscheidet ein Graph-Bonus von 0,001
+        # zwischen den beiden Top-Dateien (seit B-010 zählt nur der beste Chunk je Datei).
+        top = next(h for h in res if h["path"] == "06_Marketing/Preise_Kompakt.md")
+        self.assertLessEqual(res.index(top), 1)
         joined = " ".join(p["heading"] + " " + p["body"] for p in top["passages"])
         self.assertIn("549", joined)
 
@@ -795,6 +799,43 @@ class TestHaertung(unittest.TestCase):
         r = subprocess.run(vc + [str(bad)], capture_output=True, text=True)
         self.assertEqual(r.returncode, 2)
         self.assertNotIn("Traceback", r.stderr)
+
+
+class TestRankingB010(unittest.TestCase):
+    """B-010 (Plan 2026-11-27-b010-ranking): Dateiscore aus dem besten Chunk, nicht aus der Summe."""
+
+    def test_bester_chunk_schlaegt_viele_schwache(self):
+        # Datei "kurz" hat den besten Chunk (Rang 0); "lang" hat drei schwächere (Ränge 1–3)
+        cpath = {10: "kurz.md", 11: "lang.md", 12: "lang.md", 13: "lang.md"}
+        sc = W.file_scores([[10, 11, 12, 13]], cpath, 60)
+        self.assertGreater(sc["kurz.md"], sc["lang.md"])
+        sc3 = W.file_scores([[10, 11, 12, 13]], cpath, 60, per_file=3)   # alte Aggregation kehrt es um
+        self.assertGreater(sc3["lang.md"], sc3["kurz.md"])
+
+    def test_chunks_per_file_konfigurierbar_und_geprueft(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self.assertEqual(W.load_cfg(root)["rank"]["chunks_per_file"], 1)
+            (root / "wikitila.toml").write_text("[rank]\nchunks_per_file = 3\n", encoding="utf-8")
+            self.assertEqual(W.load_cfg(root)["rank"]["chunks_per_file"], 3)
+            (root / "wikitila.toml").write_text("[rank]\nchunks_per_file = 0\n", encoding="utf-8")
+            with self.assertRaises(W.WikitilaError):
+                W.load_cfg(root)
+
+    def test_suche_praeziese_kurze_datei_vor_langer(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            lang = "# Handbuch\n\n" + "\n\n".join(
+                f"## Abschnitt {i}\n\nAllgemeines zur Kampagne und zu Formaten, Teil {i}, mit vielen Wörtern." for i in range(8))
+            make(root, {"handbuch.md": lang,
+                        "reels.md": "# Reels\n\nBei Reels unten 20 Prozent für Buttons der Kampagne frei halten.\n"})
+            cfg = W.load_cfg(root)
+            import contextlib, io
+            with contextlib.redirect_stdout(io.StringIO()):
+                W.cmd_build(root, cfg)
+            with contextlib.closing(W.require_index(root, cfg)) as c:
+                r = W.search(c, cfg, "Reels Buttons Kampagne frei", 5)["results"]
+            self.assertEqual(r[0]["path"], "reels.md")
 
 
 def contextlib_closing(c):

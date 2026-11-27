@@ -30,7 +30,7 @@ try:
 except ModuleNotFoundError:  # Python < 3.11
     tomllib = None
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 MAX_FILE_BYTES = 600_000   # Dateien darüber werden übersprungen (Bytes, in build/check/manifest gleich)
 # Indexformat (ADR-006): erhöhen, sobald sich ändert, was build aus einer unveränderten Datei
 # erzeugt (Parsing, Chunking, Felder). Ein abweichender Wert erzwingt beim nächsten build einen Vollneubau.
@@ -47,7 +47,7 @@ DEFAULTS = {
     "corpus": {"include_ext": [".md", ".txt"], "ignore_file": ".graphifyignore", "extra_ignore": [".wikitila/", "graphify-out/"]},
     "index": {"db": ".wikitila/index.db", "max_chunk_chars": 450, "min_chunk_chars": 40},
     "rank": {"filename_boost": 0.004, "graph_weight": 0.05, "graph_top": 3, "rrf_k": 60, "stem_prefix": True,
-             "superseded_factor": 0.8},
+             "superseded_factor": 0.8, "chunks_per_file": 1},
     "graph": {"use_links": True, "use_graphify": True, "graphify_json": "graphify-out/graph.json",
               "entity_max_docs": 40},
     "embedding": {"enabled": False, "model": "embeddinggemma:latest", "url": "http://localhost:11434"},
@@ -171,6 +171,8 @@ def check_cfg(over: dict, src: Path) -> None:
             if not _typ_ok(d, v):
                 raise WikitilaError(f"Konfiguration fehlerhaft: {src}: {sec}.{key} = {v!r} — erwartet "
                                     f"{typ.get(type(d), type(d).__name__)}")
+    if over.get("rank", {}).get("chunks_per_file", 1) < 1:
+        raise WikitilaError(f"Konfiguration fehlerhaft: {src}: rank.chunks_per_file muss ≥ 1 sein")
     if over.get("index", {}).get("max_chunk_chars", 1) < 1:
         raise WikitilaError(f"Konfiguration fehlerhaft: {src}: index.max_chunk_chars muss ≥ 1 sein")
 
@@ -512,13 +514,20 @@ def fts_query(q: str, stem: bool) -> str | None:
     return " OR ".join(parts) or None
 
 
-def file_scores(lists: list[list[int]], cpath: dict, k: int) -> dict:
+def file_scores(lists: list[list[int]], cpath: dict, k: int, per_file: int = 1) -> dict:
+    """RRF-Dateiscore aus den besten `per_file` Chunk-Rängen je Liste.
+
+    Vorgabe 1 (bester Chunk). Gemessen 2026-11-27 am Referenz-Vault (36 Recall-Fälle):
+    1 Chunk MRR 0,764 / R@10 1,00, 3 Chunks (0.3.0) MRR 0,682 / R@10 0,94 — Summieren
+    bevorzugt lange Dateien mit vielen schwachen Treffern vor der präzisen kurzen Datei.
+    """
     sc = defaultdict(float)
+    per_file = max(1, per_file)
     for lst in lists:
         ranks: dict[str, list[int]] = defaultdict(list)
         for r, cid in enumerate(lst):
             p = cpath[cid]
-            if len(ranks[p]) < 3:          # bis zu drei Chunks je Datei einfließen lassen
+            if len(ranks[p]) < per_file:
                 ranks[p].append(r)
         for p, rs in ranks.items():
             sc[p] += sum(1 / (k + r + 1) for r in rs)
@@ -679,7 +688,7 @@ def search(c, cfg, q: str, k=5, *, graph=True, dense=None, filename=True, decisi
     cand_ids = {cid for lst in lists for cid in lst}
     cpath = dict(in_rows(c, "select cid, path from chunks where cid in ({q})", cand_ids))
     lists = [[cid for cid in lst if cid in cpath] for lst in lists]
-    sc = file_scores(lists, cpath, r["rrf_k"])
+    sc = file_scores(lists, cpath, r["rrf_k"], r["chunks_per_file"])
     best_chunk = {}
     best_chunks = {}
     for lst in lists:

@@ -4,6 +4,16 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen 
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-11-27
+
+Ranking-Regression behoben (B-010), Plan: [pm/plans/2026-11-27-b010-ranking.md](pm/plans/2026-11-27-b010-ranking.md).
+
+### Behoben
+- **Dateiscore aus dem besten Chunk statt aus der Summe von bis zu drei Chunks.** Die Aggregation aus 0.3.0 bevorzugte lange Dateien mit vielen schwachen Treffern. Referenz-Vault (36 Recall-Fälle): R@10 0,94 → 1,00, MRR 0,682 → 0,764, volle Passagen Top-1 42 % → 48 %. Die Passagen-Ausgabe (bis zu drei Belegstellen je Datei) ist unverändert. Kein Indexneubau nötig.
+
+### Hinzugefügt
+- `[rank] chunks_per_file` (Vorgabe 1): wie viele Chunk-Treffer je Datei in den Score eingehen — für Vergleichsmessungen.
+
 ## [0.4.0] — 2026-11-27
 
 Schreibseite (B-019, B-020), Plan: [pm/plans/2026-11-27-lint-schreibvertrag.md](pm/plans/2026-11-27-lint-schreibvertrag.md), Review: [review/report-2026-11-27-schreibseite.md](review/report-2026-11-27-schreibseite.md).

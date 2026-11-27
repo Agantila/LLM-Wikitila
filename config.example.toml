@@ -19,6 +19,7 @@ graph_top = 3
 rrf_k = 60
 stem_prefix = true         # "Anzeigen" findet "Anzeige": Wortstamm-Präfix bei Wörtern ab 7 Zeichen
 superseded_factor = 0.8    # Dateien mit superseded_by im Frontmatter rutschen nach hinten
+chunks_per_file = 1        # wie viele Chunk-Treffer je Datei in den Score eingehen; 1 gemessen am besten (3: MRR −0,08)
 
 [graph]
 use_links = true           # Link-Graph aus Dateinamen, Wikilinks, Markdown-Links, ADR-Nummern (ohne LLM)

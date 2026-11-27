@@ -16,3 +16,4 @@ Eine Zeile pro Eintrag. Format und Regeln: `AGENTS.md` Abschnitt 5.
 - [python3 im PATH ohne sqlite](python3-im-path-ohne-sqlite.md) — pyenv 3.10 ohne `_sqlite3`; Gates mit `/usr/bin/python3` laufen lassen
 - [Indexformat: Hash reicht nicht](indexformat-hash-reicht-nicht.md) — Parser-Änderungen erreichen unveränderte Dateien nur über `INDEX_FORMAT` (ADR-006)
 - [Katalog-Feld answer war ungeprüft](katalog-answer-feld-war-ungeprueft.md) — Authority-Fälle mit abgelöster Fassung sind `widersprüchlich`, nicht `belegt`
+- [Chunk-Summe verschlechtert Ranking](chunk-summe-verschlechtert-ranking.md) — bester Chunk je Datei: MRR 0,764 statt 0,682; Abdeckungs-Bonus ebenfalls schlechter
