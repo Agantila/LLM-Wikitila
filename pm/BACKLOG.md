@@ -8,7 +8,7 @@ Priorität: P1 = als Nächstes · P2 = bald · P3 = bei Gelegenheit. Status: ✅
 |---|---|---|---|---|
 | B-021 | P2 | 🟡 | Doku-Teil erledigt (indexierte Frontmatter-Felder in architecture.de/en, README, Prompts). Offen: Entscheidung tags/type indexieren (Messung, dann ADR) | Review 2026-11-27 (F3) |
 | B-022 | P3 | 🟡 | Demo-Korpus lint-konform, ein description-Fall im Katalog, `lint --all` als CI-Gate ✅. Offen: Katalogfall nur über `status` erreichbar (Unit-Test deckt es ab) | Review 2026-11-27 (F5) |
-| B-010 | P1 | ⚠️ | Referenz-Vault 2026-11-27 (v0.4.0, 1.549 Dateien): R@10 0,94, MRR 0,682 (2026-11-15: 1,00 / 0,776) → Ziel R@10 1,00, MRR ≥ 0,80. Zwei Fehltreffer durch Ranking-Konkurrenz im gewachsenen Vault analysieren | Plan 2026-11-25, B-027 |
+| B-010 | P2 | 🟡 | Regression behoben (0.4.1: bester Chunk statt Summe): Referenz-Vault R@10 1,00, MRR 0,764 (vorher 0,682). Ziel MRR ≥ 0,80 offen — 12 Fälle auf Rang 2–9; Abdeckungs-Bonus und Chunk-Summe gemessen schlechter, nicht erneut versuchen | Plan 2026-11-27-b010-ranking |
 | B-015 | P2 | 🟡 | Passagen-Präsenz 42 % → höher: Authority-Wert-Chunks, Frontmatter-Status, kurze Abschnitte indexiert; Owner-Messung offen | Plan 2026-11-25 |
 | B-016 | P2 | 🟡 | Semantische Abstention 7/8 FP → Coverage-Note (`term_coverage`/`uncovered`) umgesetzt; Antwort-Tor bleibt Signal-only (ADR-005), Owner-Messung offen | Plan 2026-11-25 |
 | B-011 | P2 | ⏳ | Link-Graph inkrementell statt komplett neu bauen (Regex über alle Texte bei jedem Build) | Review Phase C |
