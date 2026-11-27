@@ -6,6 +6,9 @@ Priorität: P1 = als Nächstes · P2 = bald · P3 = bei Gelegenheit. Status: ✅
 
 | ID | Prio | Status | Thema | Bezug |
 |---|---|---|---|---|
+| B-021 | P2 | 🟡 | Doku-Teil erledigt (indexierte Frontmatter-Felder in architecture.de/en, README, Prompts). Offen: Entscheidung tags/type indexieren (Messung, dann ADR) | Review 2026-11-27 (F3) |
+| B-022 | P3 | 🟡 | Demo-Korpus lint-konform, ein description-Fall im Katalog, `lint --all` als CI-Gate ✅. Offen: Katalogfall nur über `status` erreichbar (Unit-Test deckt es ab) | Review 2026-11-27 (F5) |
+| B-027 | P2 | ⏳ | Owner-Messung nach Release: erster `build` mit Vollneubau (ADR-006), dann Katalog — erst diese Zahlen gelten für B-010/B-015/B-016 | Plan 2026-11-27-produktionsreife |
 | B-010 | P2 | 🟡 | MRR 0,776 (Owner-Messung 2026-11-15) → ≥ 0,80: Ranking aggregiert jetzt bis zu drei Chunks; verfehlte Ränge am Owner-Vault nachmessen | Plan 2026-11-25, validation.md |
 | B-015 | P2 | 🟡 | Passagen-Präsenz 42 % → höher: Authority-Wert-Chunks, Frontmatter-Status, kurze Abschnitte indexiert; Owner-Messung offen | Plan 2026-11-25 |
 | B-016 | P2 | 🟡 | Semantische Abstention 7/8 FP → Coverage-Note (`term_coverage`/`uncovered`) umgesetzt; Antwort-Tor bleibt Signal-only (ADR-005), Owner-Messung offen | Plan 2026-11-25 |
@@ -18,6 +21,12 @@ Priorität: P1 = als Nächstes · P2 = bald · P3 = bei Gelegenheit. Status: ✅
 
 | ID | Thema | Erledigt | Bezug |
 |---|---|---|---|
+| B-023 | Indexformat-Version erzwingt Vollneubau nach Upgrade, `check`/`status` melden veraltetes Format | 2026-11-27 | ADR-006, Plan 2026-11-27-produktionsreife |
+| B-024 | Konfigurationsprüfung (Typen, Unbekanntes), Fehlerpfade ohne Traceback (SQLite, Netz, numpy, Python-Version, Strg-C, Broken Pipe), `--root`/`-k`-Validierung, Verbindungen geschlossen | 2026-11-27 | Plan 2026-11-27-produktionsreife |
+| B-025 | `validate_catalog.py --gate`, Antwortstatus-Ebene, Katalogprüfung; `eval` ohne Negativfälle; CI 3.14 + lint + Gate | 2026-11-27 | Plan 2026-11-27-produktionsreife |
+| B-026 | Frontmatter-Randfälle (BOM, leer, Dateiende, Schlüssel mit Bindestrich), Installer mit leerem Register und `PYTHON`, Wrapper, `wikitila_graph.py`-Fehlerpfade | 2026-11-27 | Plan 2026-11-27-produktionsreife |
+| B-019 | Schreib-Vertrag-Schritt in Setup-Prompt (§0 Schritt 4) und Upgrade-Prompt (§0b Schritt 4), DE+EN synchron | 2026-11-27 | Plan 2026-11-27, Review 2026-11-27 (F1/F4/F6) |
+| B-020 | `wikitila.py lint` (Einzeldatei + --all + --json, `[lint]`-Konfiguration, zweistufig Verstoß/Hinweis, gleiche parse_doc-Sicht wie der Index, Exit 1 bei Verstößen) | 2026-11-27 | Plan 2026-11-27, Review 2026-11-27 (F2) |
 | B-017 | Suchsicht: Query-`trace`, Register-Metadaten (`authority`/`verified_at`), `coverage`-Befehl | 2026-11-25 | Plan 2026-11-25, ADR-005 |
 | B-018 | Kurze Abschnitte mit Überschrift werden indexiert (vorher < `min_chunk_chars` verworfen) | 2026-11-25 | Plan 2026-11-25 |
 | B-100 | F1 Index-Pfad der Vorlage `.wikitila/`, `.gitignore`-Eintrag durch `install.sh` | 2026-11-15 | ADR-003 |
